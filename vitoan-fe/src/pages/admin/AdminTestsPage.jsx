@@ -11,6 +11,7 @@ const EMPTY_FORM = {
   subject: "",
   grade: "",
   chapter: "",
+  semester: 1,
   level: "medium",
   timeLimitSeconds: 0,
   questions: [],
@@ -113,6 +114,7 @@ export default function AdminTestsPage() {
       subject: test.subject?._id || test.subject,
       grade: test.grade?._id || test.grade,
       chapter: test.chapter?._id || test.chapter || "",
+      semester: test.semester || 1,
       level: test.level,
       timeLimitSeconds: test.timeLimitSeconds || 0,
       questions: [],
@@ -259,7 +261,7 @@ export default function AdminTestsPage() {
                 </option>
               ))}
             </select>
-            {form.testType === "topic" && (
+            {form.testType === "topic" ? (
               <select
                 className={`${inputClass} sm:col-span-2`}
                 value={form.chapter}
@@ -272,6 +274,15 @@ export default function AdminTestsPage() {
                     {c.title}
                   </option>
                 ))}
+              </select>
+            ) : (
+              <select
+                className={`${inputClass} sm:col-span-2`}
+                value={form.semester}
+                onChange={(e) => setForm((f) => ({ ...f, semester: Number(e.target.value) }))}
+              >
+                <option value={1}>Học kỳ 1</option>
+                <option value={2}>Học kỳ 2</option>
               </select>
             )}
             <input
@@ -408,7 +419,8 @@ export default function AdminTestsPage() {
                 </p>
                 <p className="text-caption text-slate-500">
                   {TEST_TYPE_LABEL[test.testType]} · {test.grade?.name} · {test.subject?.name}
-                  {test.chapter?.title ? ` · ${test.chapter.title}` : ""} · {LEVEL_LABEL[test.level]} · {test.questionCount} câu
+                  {test.chapter?.title ? ` · ${test.chapter.title}` : ` · Học kỳ ${test.semester || 1}`} ·{" "}
+                  {LEVEL_LABEL[test.level]} · {test.questionCount} câu
                   {test.timeLimitSeconds > 0 ? ` · ${Math.round(test.timeLimitSeconds / 60)} phút` : ""}
                 </p>
               </div>

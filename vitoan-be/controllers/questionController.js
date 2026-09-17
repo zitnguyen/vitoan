@@ -1,5 +1,6 @@
 const Question = require("../models/Question");
 const Lesson = require("../models/Lesson");
+const { gradeAnswer } = require("../utils/grading");
 
 function stripAnswer(question) {
   const { _id, lesson, type, text, audioText, imageUrl, choices, difficulty, order } = question;
@@ -18,6 +19,31 @@ async function listByLesson(req, res, next) {
     const questions = await Question.find({ lesson: req.params.lessonId }).sort({ order: 1, createdAt: 1 });
     const isAdmin = req.user && req.user.role === "Admin";
     res.json({ success: true, data: isAdmin ? questions : questions.map(stripAnswer) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function checkAnswer(req, res, next) {
+  try {
+    const question = await Question.findById(req.params.id);
+    if (!question) return res.status(404).json({ success: false, message: "Không tìm thấy câu hỏi" });
+
+    const lesson = await Lesson.findById(question.lesson).select("isTrial");
+    if (!req.user && !lesson?.isTrial) {
+      return res.status(401).json({ success: false, message: "Vui lòng đăng nhập để làm bài học này" });
+    }
+
+    const correct = gradeAnswer(question, req.body);
+    res.json({
+      success: true,
+      data: {
+        correct,
+        correctIndex: question.correctIndex,
+        correctText: question.correctText,
+        explanation: question.explanation,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -51,4 +77,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { listByLesson, create, update, remove };
+module.exports = { listByLesson, checkAnswer, create, update, remove };

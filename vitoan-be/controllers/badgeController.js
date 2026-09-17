@@ -1,5 +1,15 @@
 const Badge = require("../models/Badge");
 const StudentBadge = require("../models/StudentBadge");
+const { computeBadgeStats } = require("../utils/badgeStats");
+
+async function progress(req, res, next) {
+  try {
+    const stats = await computeBadgeStats(req.user._id);
+    res.json({ success: true, data: stats });
+  } catch (err) {
+    next(err);
+  }
+}
 
 async function list(req, res, next) {
   try {
@@ -75,4 +85,4 @@ async function award(req, res, next) {
   }
 }
 
-module.exports = { list, myBadges, create, update, remove, award };
+module.exports = { list, myBadges, progress, create, update, remove, award };

@@ -27,6 +27,8 @@ const testAttemptRoutes = require("./routes/testAttemptRoutes");
 const adminStatsRoutes = require("./routes/adminStatsRoutes");
 const commentRoutes = require("./routes/commentRoutes");
 const ttsRoutes = require("./routes/ttsRoutes");
+const missionRoutes = require("./routes/missionRoutes");
+const rewardRoutes = require("./routes/rewardRoutes");
 
 const app = express();
 
@@ -103,6 +105,8 @@ app.use("/api/test-attempts", testAttemptRoutes);
 app.use("/api/admin", adminStatsRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/tts", ttsRoutes);
+app.use("/api/missions", missionRoutes);
+app.use("/api/rewards", rewardRoutes);
 
 app.get("/api/health", (req, res) => {
   res.json({ success: true, data: { status: "ok" } });

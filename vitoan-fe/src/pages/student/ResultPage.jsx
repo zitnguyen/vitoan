@@ -3,6 +3,7 @@ import { useParams, useLocation } from "react-router-dom";
 import { attemptService } from "../../api/services";
 import Spinner from "../../components/ui/Spinner.jsx";
 import QuizResultView from "../../components/quiz/QuizResultView.jsx";
+import QuizResultLayout from "../../components/quiz/QuizResultLayout.jsx";
 
 export default function ResultPage() {
   const { attemptId } = useParams();
@@ -28,8 +29,8 @@ export default function ResultPage() {
   if (!attempt) return null;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12">
+    <QuizResultLayout>
       <QuizResultView attempt={attempt} newBadges={location.state?.newBadges} />
-    </div>
+    </QuizResultLayout>
   );
 }

@@ -184,7 +184,7 @@ export default function LessonContentPage() {
     }
   }
 
-  if (loading) {
+  if (loading && !lesson) {
     return (
       <div className="flex h-96 items-center justify-center">
         <Spinner />
@@ -225,7 +225,7 @@ export default function LessonContentPage() {
   const currentPosition = lesson?.order ?? siblingIndex + 1;
 
   return (
-    <div className="bg-slate-50">
+    <div className={cn("bg-slate-50 transition-opacity", loading && "opacity-60")}>
       {/* ===== Breadcrumb: orient the student within grade > subject > chapter ===== */}
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 px-6 pt-4 text-body text-slate-500 xl:px-10">
         <Link to="/" className="flex items-center gap-1.5 hover:text-primary">

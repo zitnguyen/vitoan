@@ -4,23 +4,7 @@ const Lesson = require("../models/Lesson");
 const Badge = require("../models/Badge");
 const StudentBadge = require("../models/StudentBadge");
 const { gradeAnswer } = require("../utils/grading");
-
-function dayKey(date) {
-  return new Date(date).toISOString().slice(0, 10);
-}
-
-async function computeStreak(studentId) {
-  const attempts = await Attempt.find({ student: studentId }).select("createdAt").sort({ createdAt: -1 });
-  const days = new Set(attempts.map((a) => dayKey(a.createdAt)));
-  let streak = 0;
-  const cursor = new Date();
-  for (;;) {
-    if (!days.has(dayKey(cursor))) break;
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
-}
+const { computeBadgeStats } = require("../utils/badgeStats");
 
 async function checkAndAwardBadges(studentId) {
   const badges = await Badge.find({ isActive: true });
@@ -32,26 +16,12 @@ async function checkAndAwardBadges(studentId) {
   const candidates = badges.filter((b) => !alreadyOwned.has(String(b._id)));
   if (candidates.length === 0) return [];
 
-  const needsLessonsCount = candidates.some((b) => b.conditionType === "lessons_completed");
-  const needsPerfectCount = candidates.some((b) => b.conditionType === "perfect_score");
-  const needsStreak = candidates.some((b) => b.conditionType === "streak");
-
-  const [distinctLessons, perfectCount, streak] = await Promise.all([
-    needsLessonsCount ? Attempt.distinct("lesson", { student: studentId }) : Promise.resolve([]),
-    needsPerfectCount
-      ? Attempt.countDocuments({ student: studentId, $expr: { $eq: ["$score", "$totalQuestions"] } })
-      : Promise.resolve(0),
-    needsStreak ? computeStreak(studentId) : Promise.resolve(0),
-  ]);
+  const stats = await computeBadgeStats(studentId);
 
   const awarded = [];
   for (const badge of candidates) {
-    let earned = false;
-    if (badge.conditionType === "lessons_completed") earned = distinctLessons.length >= badge.conditionValue;
-    else if (badge.conditionType === "perfect_score") earned = perfectCount >= badge.conditionValue;
-    else if (badge.conditionType === "streak") earned = streak >= badge.conditionValue;
-
-    if (earned) {
+    const stat = stats[badge.conditionType] ?? 0;
+    if (stat >= badge.conditionValue) {
       await StudentBadge.create({ student: studentId, badge: badge._id });
       awarded.push(badge);
     }

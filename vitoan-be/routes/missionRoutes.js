@@ -1,13 +1,11 @@
 const express = require("express");
-const { listByLesson, checkAnswer, create, update, remove } = require("../controllers/questionController");
-const { getHint } = require("../controllers/hintController");
+const { list, claim, create, update, remove } = require("../controllers/missionController");
 const { protect, optionalAuth, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-router.get("/lesson/:lessonId", optionalAuth, listByLesson);
-router.post("/:id/check", optionalAuth, checkAnswer);
-router.post("/:id/hint", optionalAuth, getHint);
+router.get("/", optionalAuth, list);
+router.post("/:id/claim", protect, authorize("Student"), claim);
 router.post("/", protect, authorize("Admin"), create);
 router.put("/:id", protect, authorize("Admin"), update);
 router.delete("/:id", protect, authorize("Admin"), remove);

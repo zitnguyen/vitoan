@@ -7,6 +7,9 @@ const testSchema = new mongoose.Schema(
     subject: { type: mongoose.Schema.Types.ObjectId, ref: "Subject", required: true },
     grade: { type: mongoose.Schema.Types.ObjectId, ref: "Grade", required: true },
     chapter: { type: mongoose.Schema.Types.ObjectId, ref: "Chapter" },
+    // Chỉ có ý nghĩa với testType "midterm"/"final" — đề kiểm tra "topic" đã gắn
+    // với 1 chương nên học kỳ suy ra được từ chapter.semester.
+    semester: { type: Number, enum: [1, 2], default: 1 },
     level: { type: String, enum: ["easy", "medium", "hard"], default: "medium" },
     timeLimitSeconds: { type: Number, default: 0 },
     questions: [{ type: mongoose.Schema.Types.ObjectId, ref: "Question" }],

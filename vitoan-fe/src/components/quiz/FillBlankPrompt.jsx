@@ -1,7 +1,7 @@
 // Hiển thị câu hỏi "điền vào chỗ trống": tách text theo từng dòng, dòng nào có
 // dấu "___" thì chèn ô nhập inline ngay vị trí đó (dùng cho cả Toán và Tiếng Việt,
 // kể cả dạng "nghe rồi điền" — audio phát riêng ở nơi gọi component này).
-export default function FillBlankPrompt({ text, value, onChange }) {
+export default function FillBlankPrompt({ text, value, onChange, disabled = false }) {
   const lines = text.split("\n");
   return (
     <div className="mt-4 space-y-2">
@@ -26,7 +26,8 @@ export default function FillBlankPrompt({ text, value, onChange }) {
               onChange={(e) => onChange(e.target.value)}
               placeholder="?"
               autoComplete="off"
-              className="w-28 rounded-xl border-2 border-primary/40 bg-primary/5 px-3 py-2 text-center text-body-lg font-bold text-primary outline-none focus:border-primary"
+              disabled={disabled}
+              className="w-28 rounded-xl border-2 border-primary/40 bg-primary/5 px-3 py-2 text-center text-body-lg font-bold text-primary outline-none focus:border-primary disabled:opacity-70"
             />
             {after && <span>{after}</span>}
           </div>

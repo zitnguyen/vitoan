@@ -84,6 +84,15 @@ export function AuthProvider({ children }) {
     await axiosClient.put("/auth/change-password", payload);
   }, []);
 
+  // Đồng bộ lại user (đặc biệt là `points`) sau khi nhận thưởng nhiệm vụ hoặc đổi quà.
+  const refreshUser = useCallback(async () => {
+    const res = await axiosClient.get("/auth/me");
+    const auth = getStoredAuth();
+    setStoredAuth({ ...auth, user: res.data.user });
+    setUser(res.data.user);
+    return res.data.user;
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await axiosClient.post("/auth/logout");
@@ -107,6 +116,7 @@ export function AuthProvider({ children }) {
         updateProfile,
         uploadAvatar,
         changePassword,
+        refreshUser,
         logout,
       }}
     >

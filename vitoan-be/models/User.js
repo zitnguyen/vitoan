@@ -19,6 +19,8 @@ const userSchema = new mongoose.Schema(
     dateOfBirth: { type: Date },
     role: { type: String, enum: ["Student", "Admin"], default: "Student" },
     grade: { type: mongoose.Schema.Types.ObjectId, ref: "Grade" },
+    // Điểm thưởng tích luỹ được từ hoàn thành nhiệm vụ, dùng để đổi quà.
+    points: { type: Number, default: 0, min: 0 },
     isActive: { type: Boolean, default: true },
     status: { type: String, enum: ["active", "suspended", "disabled"], default: "active" },
     lastLoginAt: { type: Date },

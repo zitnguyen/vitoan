@@ -37,6 +37,8 @@ export const lessonService = {
 
 export const questionService = {
   listByLesson: (lessonId) => axiosClient.get(`/questions/lesson/${lessonId}`),
+  checkAnswer: (id, payload) => axiosClient.post(`/questions/${id}/check`, payload),
+  getHint: (id) => axiosClient.post(`/questions/${id}/hint`),
   create: (payload) => axiosClient.post("/questions", payload),
   update: (id, payload) => axiosClient.put(`/questions/${id}`, payload),
   remove: (id) => axiosClient.delete(`/questions/${id}`),
@@ -61,6 +63,18 @@ export const reviewContentService = {
 export const badgeService = {
   list: () => axiosClient.get("/badges"),
   myBadges: () => axiosClient.get("/badges/me"),
+  progress: () => axiosClient.get("/badges/progress"),
+};
+
+export const missionService = {
+  list: () => axiosClient.get("/missions"),
+  claim: (id) => axiosClient.post(`/missions/${id}/claim`),
+};
+
+export const rewardService = {
+  list: () => axiosClient.get("/rewards"),
+  myRedemptions: () => axiosClient.get("/rewards/me"),
+  redeem: (id) => axiosClient.post(`/rewards/${id}/redeem`),
 };
 
 export const attemptService = {

@@ -20,6 +20,7 @@ function toPublicUser(user) {
     dateOfBirth: user.dateOfBirth,
     role: user.role,
     grade: user.grade,
+    points: user.points || 0,
   };
 }
 

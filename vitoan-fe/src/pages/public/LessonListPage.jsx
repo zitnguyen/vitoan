@@ -48,6 +48,7 @@ export default function LessonListPage() {
   const [tests, setTests] = useState([]);
   const [activeSemester, setActiveSemester] = useState(1);
   const [expandedChapterId, setExpandedChapterId] = useState(null);
+  const [selectedTestType, setSelectedTestType] = useState(null);
   const [search, setSearch] = useState("");
   const [continueLesson, setContinueLesson] = useState(null);
   const [completedLessonIds, setCompletedLessonIds] = useState(new Set());
@@ -259,6 +260,8 @@ export default function LessonListPage() {
             const chapterTests = activeChapter
               ? tests.filter((t) => t.chapter?._id === activeChapter._id || t.chapter === activeChapter._id)
               : [];
+            const semesterMidterm = tests.find((t) => t.testType === "midterm" && (t.semester || 1) === activeSemester);
+            const semesterFinal = tests.find((t) => t.testType === "final" && (t.semester || 1) === activeSemester);
             const completedCount = chapterLessons.filter((l) => completedLessonIds.has(l._id)).length;
             const needsPracticeCount = user
               ? chapterLessons.filter((l) => !completedLessonIds.has(l._id) && statusByLesson.get(l._id) !== "locked").length
@@ -313,14 +316,17 @@ export default function LessonListPage() {
                   ) : (
                     <div className="max-h-[560px] overflow-y-auto px-4 pb-3">
                       {filteredChapters.map((chapter, i) => {
-                        const selected = activeChapter?._id === chapter._id;
+                        const selected = !selectedTestType && activeChapter?._id === chapter._id;
                         const cLessons = lessons.filter((l) => l.chapter === chapter._id);
                         const cTests = tests.filter((t) => t.chapter?._id === chapter._id || t.chapter === chapter._id);
                         return (
                           <button
                             key={chapter._id}
                             type="button"
-                            onClick={() => setExpandedChapterId(chapter._id)}
+                            onClick={() => {
+                              setExpandedChapterId(chapter._id);
+                              setSelectedTestType(null);
+                            }}
                             className="flex w-full gap-3 text-left"
                           >
                             <div className="flex flex-col items-center pt-2.5">
@@ -330,7 +336,7 @@ export default function LessonListPage() {
                                   selected ? "border-secondary bg-secondary" : "border-slate-300 bg-white"
                                 )}
                               />
-                              {i < filteredChapters.length - 1 && <span className="mt-1 w-0.5 flex-1 bg-slate-200" />}
+                              <span className="mt-1 w-0.5 flex-1 bg-slate-200" />
                             </div>
                             <div
                               className={cn(
@@ -349,13 +355,73 @@ export default function LessonListPage() {
                           </button>
                         );
                       })}
+
+                      {[
+                        { type: "midterm", label: "Kiểm tra giữa kỳ", test: semesterMidterm },
+                        { type: "final", label: "Kiểm tra cuối kỳ", test: semesterFinal },
+                      ].map(({ type, label, test }, i, arr) => {
+                        const selected = selectedTestType === type;
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setSelectedTestType(type)}
+                            className="flex w-full gap-3 text-left"
+                          >
+                            <div className="flex flex-col items-center pt-2">
+                              <span
+                                className={cn(
+                                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white transition",
+                                  selected ? "bg-vietnamese" : "bg-slate-300"
+                                )}
+                              >
+                                <ClipboardCheck className="h-3 w-3" />
+                              </span>
+                              {i < arr.length - 1 && <span className="mt-1 w-0.5 flex-1 bg-slate-200" />}
+                            </div>
+                            <div
+                              className={cn(
+                                "mb-3 flex-1 rounded-xl px-3 py-2.5 transition",
+                                selected ? "bg-vietnamese/10" : "hover:bg-slate-50"
+                              )}
+                            >
+                              <p className={cn("font-display text-sm font-bold", selected ? "text-vietnamese" : "text-slate-700")}>
+                                {label}
+                              </p>
+                              <p className="mt-0.5 text-[12px] text-slate-400">{test ? "Đã có đề kiểm tra" : "Đang cập nhật đề"}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
                 {/* ── RIGHT: detail panel ── */}
                 <div className="rounded-3xl bg-white p-6 shadow-elevation-2 ring-1 ring-slate-100">
-                  {!activeChapter ? (
+                  {selectedTestType ? (
+                    <div className="flex flex-col items-center py-10 text-center">
+                      <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-vietnamese/15 text-vietnamese">
+                        <ClipboardCheck className="h-8 w-8" />
+                      </span>
+                      <h3 className="mt-4 font-display text-h3 text-slate-800">
+                        {selectedTestType === "midterm" ? "Kiểm tra giữa kỳ" : "Kiểm tra cuối kỳ"}
+                      </h3>
+                      <p className="mt-1 text-body text-slate-500">
+                        {(selectedTestType === "midterm" ? semesterMidterm : semesterFinal)
+                          ? `Đề tổng hợp kiến thức Học kỳ ${activeSemester}`
+                          : "Đề kiểm tra đang được chuẩn bị, quay lại sau nhé!"}
+                      </p>
+                      {(selectedTestType === "midterm" ? semesterMidterm : semesterFinal) && (
+                        <Link
+                          to={`/kiem-tra/${(selectedTestType === "midterm" ? semesterMidterm : semesterFinal)._id}`}
+                          className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-vietnamese px-6 py-3 text-sm font-bold text-white transition hover:bg-orange-600"
+                        >
+                          <ClipboardCheck className="h-4 w-4" /> Bắt đầu làm bài
+                        </Link>
+                      )}
+                    </div>
+                  ) : !activeChapter ? (
                     <p className="py-10 text-center text-sm text-slate-400">Chọn một chủ đề bên trái để xem chi tiết.</p>
                   ) : (
                     <>

@@ -27,6 +27,7 @@ import {
   Menu,
   X,
   Sparkles,
+  Bot,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { gradeService } from "../../api/services";
@@ -36,15 +37,21 @@ import { cn } from "../../lib/utils";
 
 const NAV_LINKS = [{ to: "/", label: "Trang chủ" }, { to: "/#vi-sao", label: "Vì sao chọn ViToan" }];
 
-const MAIN_NAV_ITEMS = [
-  { to: "/thanh-tich", label: "Thành tích", Icon: Trophy, color: "text-amber-500" },
+const TOP_NAV_ITEMS = [
   { to: "/nhiem-vu", label: "Nhiệm vụ", Icon: Target, color: "text-violet-500" },
-  { to: "/dau-truong", label: "Đấu trường", Icon: Swords, color: "text-rose-500" },
-  { to: "/doi-qua", label: "Đổi quà", Icon: Gift, color: "text-pink-500" },
   { to: "/mua-khoa-hoc", label: "Khoá học", Icon: BookMarked, color: "text-secondary" },
+  { to: "/thanh-tich", label: "Thành tích", Icon: Trophy, color: "text-amber-500" },
+  { to: "/doi-qua", label: "Đổi quà", Icon: Gift, color: "text-pink-500" },
+  { to: "/ban-dong-hanh", label: "Bạn đồng hành", Icon: Bot, color: "text-primary" },
+];
+
+const MORE_NAV_ITEMS = [
+  { to: "/dau-truong", label: "Đấu trường", Icon: Swords, color: "text-rose-500" },
   { to: "/tin-tuc", label: "Tin tức", Icon: Newspaper, color: "text-teal-500" },
   { to: "/lien-he", label: "Liên hệ", Icon: LifeBuoy, color: "text-red-500" },
 ];
+
+const MAIN_NAV_ITEMS = [...TOP_NAV_ITEMS, ...MORE_NAV_ITEMS];
 
 const GRADE_THEMES = [
   { bg: "bg-primary", Icon: Sprout },
@@ -150,7 +157,7 @@ function MoreNavDropdown() {
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-3 w-56 rounded-2xl bg-white p-2 shadow-elevation-3 ring-1 ring-slate-100">
-          {MAIN_NAV_ITEMS.map((item) => (
+          {MORE_NAV_ITEMS.map((item) => (
             <Link
               key={item.to}
               to={item.to}
@@ -291,7 +298,7 @@ function MobileMenu({ user, onLogout, onClose }) {
 
         {user && (
           <>
-            <p className="mt-3 px-3 text-caption font-bold uppercase tracking-wide text-slate-400">Khám phá</p>
+            <p className="mt-3 px-3 text-caption font-bold uppercase tracking-wide text-slate-400">Chức năng</p>
             <div className="mt-1 space-y-0.5">
               {MAIN_NAV_ITEMS.map((item) => (
                 <button key={item.to} type="button" onClick={() => go(item.to)} className={cn(itemClass, "w-full")}>
@@ -391,9 +398,9 @@ export default function SiteHeader() {
               <span className="flex items-center gap-1.5">
                 <Bell className="h-3.5 w-3.5 text-secondary" /> 0
               </span>
-              <span className="flex items-center gap-1.5">
-                <Gem className="h-3.5 w-3.5 text-vietnamese" /> 0
-              </span>
+              <Link to="/doi-qua" className="flex items-center gap-1.5 hover:text-vietnamese">
+                <Gem className="h-3.5 w-3.5 text-vietnamese" /> {user.points ?? 0}
+              </Link>
               {user.grade?.name && (
                 <span className="flex items-center gap-1.5">
                   <GraduationCap className="h-3.5 w-3.5 text-primary" /> {user.grade.name}
@@ -416,11 +423,21 @@ export default function SiteHeader() {
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-5 text-[13px] 2xl:text-sm xl:flex">
+        <nav className="hidden items-center gap-4 text-[13px] 2xl:gap-5 2xl:text-sm xl:flex">
           <a href={NAV_LINKS[0].to} className="whitespace-nowrap font-semibold text-slate-600 hover:text-primary">
             {NAV_LINKS[0].label}
           </a>
           <GradesDropdown activeGrade={user?.grade} />
+          {user &&
+            TOP_NAV_ITEMS.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="flex items-center gap-1.5 whitespace-nowrap font-semibold text-slate-600 hover:text-primary"
+              >
+                <item.Icon className={cn("h-4 w-4 shrink-0", item.color)} /> {item.label}
+              </Link>
+            ))}
           {user && <MoreNavDropdown />}
           {!user && (
             <a href={NAV_LINKS[1].to} className="whitespace-nowrap font-semibold text-slate-600 hover:text-primary">

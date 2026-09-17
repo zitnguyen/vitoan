@@ -13,6 +13,7 @@ async function list(req, res, next) {
     if (req.query.subject) filter.subject = req.query.subject;
     if (req.query.grade) filter.grade = req.query.grade;
     if (req.query.chapter) filter.chapter = req.query.chapter;
+    if (req.query.semester) filter.semester = Number(req.query.semester);
     if (req.query.level) filter.level = req.query.level;
     if (req.query.search) filter.title = new RegExp(req.query.search.trim(), "i");
     const isAdmin = req.user && req.user.role === "Admin";
