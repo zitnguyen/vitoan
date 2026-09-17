@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+
+# Real secrets — never commit. Keep only .env.example as the template.
+.env
+.env.local
+.env.*.local
+.envnguyen
+vitoan-be/.envnguyen
+vitoan-fe/.envnguyen
+
+# Runtime/user-uploaded content — not source code.
+vitoan-be/uploads/
+
+# Local DB export — contains real user data (password hashes, tokens).
+# Transfer it to the server directly instead of committing it.
+vitoan_db_dump/
+
+.DS_Store
+*.log
