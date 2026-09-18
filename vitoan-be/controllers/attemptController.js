@@ -1,10 +1,11 @@
 const Question = require("../models/Question");
 const Attempt = require("../models/Attempt");
 const Lesson = require("../models/Lesson");
+const Subject = require("../models/Subject");
 const Badge = require("../models/Badge");
 const StudentBadge = require("../models/StudentBadge");
 const { gradeAnswer } = require("../utils/grading");
-const { computeBadgeStats } = require("../utils/badgeStats");
+const { computeBadgeStats, computeStreak } = require("../utils/badgeStats");
 
 async function checkAndAwardBadges(studentId) {
   const badges = await Badge.find({ isActive: true });
@@ -181,4 +182,61 @@ async function myHistory(req, res, next) {
   }
 }
 
-module.exports = { submit, submitGuest, getOne, myHistory, completedLessons, lessonStatus };
+async function stats(req, res, next) {
+  try {
+    const studentId = req.user._id;
+    const attempts = await Attempt.find({ student: studentId })
+      .select("lesson score totalQuestions createdAt")
+      .populate("lesson", "subject");
+
+    const totalAttempts = attempts.length;
+    const avgPercent = totalAttempts
+      ? Math.round((attempts.reduce((sum, a) => sum + a.score / a.totalQuestions, 0) / totalAttempts) * 100)
+      : 0;
+    const streak = await computeStreak(studentId);
+
+    const bySubjectAgg = new Map();
+    for (const a of attempts) {
+      const sid = a.lesson?.subject ? String(a.lesson.subject) : null;
+      if (!sid) continue;
+      const entry = bySubjectAgg.get(sid) || { count: 0, correct: 0, total: 0 };
+      entry.count += 1;
+      entry.correct += a.score;
+      entry.total += a.totalQuestions;
+      bySubjectAgg.set(sid, entry);
+    }
+    const subjects = await Subject.find({ _id: { $in: [...bySubjectAgg.keys()] } });
+    const subjectNameById = new Map(subjects.map((s) => [String(s._id), s.name]));
+    const bySubject = [...bySubjectAgg.entries()].map(([sid, v]) => ({
+      subject: subjectNameById.get(sid) || "Khác",
+      count: v.count,
+      avgPercent: v.total ? Math.round((v.correct / v.total) * 100) : 0,
+    }));
+
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      days.push(d);
+    }
+    const byDate = days.map((d) => {
+      const next = new Date(d);
+      next.setDate(next.getDate() + 1);
+      const dayAttempts = attempts.filter((a) => a.createdAt >= d && a.createdAt < next);
+      const correct = dayAttempts.reduce((sum, a) => sum + a.score, 0);
+      const total = dayAttempts.reduce((sum, a) => sum + a.totalQuestions, 0);
+      return {
+        date: d.toISOString().slice(0, 10),
+        attempts: dayAttempts.length,
+        avgPercent: total ? Math.round((correct / total) * 100) : 0,
+      };
+    });
+
+    res.json({ success: true, data: { totalAttempts, avgPercent, streak, bySubject, byDate } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { submit, submitGuest, getOne, myHistory, completedLessons, lessonStatus, stats };

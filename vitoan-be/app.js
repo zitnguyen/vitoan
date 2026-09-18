@@ -29,6 +29,7 @@ const commentRoutes = require("./routes/commentRoutes");
 const ttsRoutes = require("./routes/ttsRoutes");
 const missionRoutes = require("./routes/missionRoutes");
 const rewardRoutes = require("./routes/rewardRoutes");
+const chatRoutes = require("./routes/chatRoutes");
 
 const app = express();
 
@@ -107,6 +108,7 @@ app.use("/api/comments", commentRoutes);
 app.use("/api/tts", ttsRoutes);
 app.use("/api/missions", missionRoutes);
 app.use("/api/rewards", rewardRoutes);
+app.use("/api/conversations", chatRoutes);
 
 app.get("/api/health", (req, res) => {
   res.json({ success: true, data: { status: "ok" } });

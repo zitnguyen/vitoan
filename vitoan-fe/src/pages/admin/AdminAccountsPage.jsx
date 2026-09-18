@@ -196,7 +196,7 @@ export default function AdminAccountsPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             className={`${inputClass} w-full pl-9`}
-            placeholder="Tìm theo họ tên hoặc email"
+            placeholder="Tìm theo họ tên, tên đăng nhập, email hoặc SĐT"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

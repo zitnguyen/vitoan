@@ -16,6 +16,9 @@ import PlayQuizPage from "./pages/student/PlayQuizPage.jsx";
 import ResultPage from "./pages/student/ResultPage.jsx";
 import HistoryPage from "./pages/student/HistoryPage.jsx";
 import AchievementsPage from "./pages/student/AchievementsPage.jsx";
+import StatsPage from "./pages/student/StatsPage.jsx";
+import AIChatPage from "./pages/student/AIChatPage.jsx";
+import LeaderboardPage from "./pages/student/LeaderboardPage.jsx";
 import ProfilePage from "./pages/student/ProfilePage.jsx";
 import ChangePasswordPage from "./pages/student/ChangePasswordPage.jsx";
 import OnTapPage from "./pages/student/OnTapPage.jsx";
@@ -27,8 +30,12 @@ import AdminLessonsPage from "./pages/admin/AdminLessonsPage.jsx";
 import AdminQuestionsPage from "./pages/admin/AdminQuestionsPage.jsx";
 import AdminPracticeSetsPage from "./pages/admin/AdminPracticeSetsPage.jsx";
 import AdminReviewContentPage from "./pages/admin/AdminReviewContentPage.jsx";
+import AdminReviewContentListPage from "./pages/admin/AdminReviewContentListPage.jsx";
+import AdminQuestionBankPage from "./pages/admin/AdminQuestionBankPage.jsx";
+import AdminPracticeSetListPage from "./pages/admin/AdminPracticeSetListPage.jsx";
 import AdminTestsPage from "./pages/admin/AdminTestsPage.jsx";
 import AdminAccountsPage from "./pages/admin/AdminAccountsPage.jsx";
+import AdminRewardsPage from "./pages/admin/AdminRewardsPage.jsx";
 import NotFoundPage from "./pages/common/NotFoundPage.jsx";
 import ComingSoonPage from "./pages/common/ComingSoonPage.jsx";
 import MissionsPage from "./pages/student/MissionsPage.jsx";
@@ -149,6 +156,22 @@ export default function App() {
             }
           />
           <Route
+            path="/thong-ke"
+            element={
+              <ProtectedRoute allowedRoles={["Student"]}>
+                <StatsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/xep-hang"
+            element={
+              <ProtectedRoute allowedRoles={["Student"]}>
+                <LeaderboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/nhiem-vu"
             element={
               <ProtectedRoute allowedRoles={["Student"]}>
@@ -168,7 +191,14 @@ export default function App() {
           <Route path="/mua-khoa-hoc" element={<ComingSoonPage title="Khoá học nâng cao" description="ViToan hiện hoàn toàn miễn phí. Các gói khoá học nâng cao (nếu có) sẽ được thông báo tại đây." />} />
           <Route path="/tin-tuc" element={<ComingSoonPage title="Tin tức" description="Những bài viết, mẹo học tập và tin tức mới nhất từ ViToan sẽ được cập nhật tại đây." />} />
           <Route path="/lien-he" element={<ComingSoonPage title="Liên hệ" description="Trang liên hệ đang được hoàn thiện. Bạn có thể nhắn tin qua trang chủ để được hỗ trợ." />} />
-          <Route path="/ban-dong-hanh" element={<ComingSoonPage title="Bạn đồng hành" description="Trợ lý AI đồng hành cùng em trong suốt quá trình học tập sắp ra mắt tại đây." />} />
+          <Route
+            path="/ban-dong-hanh"
+            element={
+              <ProtectedRoute allowedRoles={["Student"]}>
+                <AIChatPage />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/admin"
@@ -211,6 +241,30 @@ export default function App() {
             }
           />
           <Route
+            path="/admin/noi-dung-on-tap"
+            element={
+              <AdminLayout>
+                <AdminReviewContentListPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/ngan-hang-cau-hoi"
+            element={
+              <AdminLayout>
+                <AdminQuestionBankPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/danh-sach-luyen-tap"
+            element={
+              <AdminLayout>
+                <AdminPracticeSetListPage />
+              </AdminLayout>
+            }
+          />
+          <Route
             path="/admin/kiem-tra"
             element={
               <AdminLayout>
@@ -223,6 +277,14 @@ export default function App() {
             element={
               <AdminLayout>
                 <AdminAccountsPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/doi-diem"
+            element={
+              <AdminLayout>
+                <AdminRewardsPage />
               </AdminLayout>
             }
           />

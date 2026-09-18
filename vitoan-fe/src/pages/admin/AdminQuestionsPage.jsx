@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Pencil, Trash2, X, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, X, CheckCircle2, Sparkles } from "lucide-react";
 import { lessonService, questionService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
@@ -37,6 +37,10 @@ export default function AdminQuestionsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState("");
+  const [aiCount, setAiCount] = useState(5);
+  const [aiDifficulty, setAiDifficulty] = useState("easy");
+  const [aiDrafts, setAiDrafts] = useState([]);
+  const [generating, setGenerating] = useState(false);
 
   async function loadQuestions() {
     const res = await questionService.listByLesson(lessonId);
@@ -91,6 +95,38 @@ export default function AdminQuestionsPage() {
     });
   }
 
+  async function handleGenerate() {
+    setError("");
+    setGenerating(true);
+    try {
+      const res = await questionService.aiGenerate({ lessonId, count: aiCount, difficulty: aiDifficulty });
+      setAiDrafts(res.data);
+    } catch (err) {
+      setError(err.apiMessage || "Không thể tạo câu hỏi bằng AI lúc này");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function useDraft(idx) {
+    const draft = aiDrafts[idx];
+    setEditingId(null);
+    setForm({
+      ...EMPTY_FORM,
+      type: "multiple_choice",
+      text: draft.text,
+      choices: draft.choices,
+      correctIndex: draft.correctIndex,
+      explanation: draft.explanation,
+      difficulty: draft.difficulty,
+    });
+    setAiDrafts((d) => d.filter((_, i) => i !== idx));
+  }
+
+  function discardDraft(idx) {
+    setAiDrafts((d) => d.filter((_, i) => i !== idx));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -134,6 +170,64 @@ export default function AdminQuestionsPage() {
         <ArrowLeft className="h-4 w-4" /> Quay lại danh sách bài học
       </Link>
       <h1 className="mt-2 font-display text-h2 text-slate-800">Câu hỏi: {lesson?.title}</h1>
+
+      <div className="mt-6 rounded-2xl bg-violet-50 p-5 ring-1 ring-violet-100">
+        <p className="flex items-center gap-1.5 font-display font-bold text-violet-700">
+          <Sparkles className="h-4.5 w-4.5" /> Tạo câu hỏi bằng AI
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            max={10}
+            className={`${inputClass} w-24`}
+            value={aiCount}
+            onChange={(e) => setAiCount(Number(e.target.value))}
+          />
+          <select className={`${inputClass} w-40`} value={aiDifficulty} onChange={(e) => setAiDifficulty(e.target.value)}>
+            <option value="easy">Dễ</option>
+            <option value="medium">Trung bình</option>
+            <option value="hard">Khó</option>
+          </select>
+          <Button type="button" onClick={handleGenerate} disabled={generating}>
+            {generating ? "Đang tạo..." : "Sinh câu hỏi"}
+          </Button>
+        </div>
+
+        {aiDrafts.length > 0 && (
+          <div className="mt-4 space-y-2.5">
+            {aiDrafts.map((draft, idx) => (
+              <div key={idx} className="rounded-xl bg-white p-3.5 ring-1 ring-violet-100">
+                <p className="text-sm font-semibold text-slate-800">{draft.text}</p>
+                <ul className="mt-1.5 grid grid-cols-1 gap-1 text-caption text-slate-500 sm:grid-cols-2">
+                  {draft.choices.map((c, i) => (
+                    <li key={i} className={i === draft.correctIndex ? "font-bold text-primary" : ""}>
+                      {i === draft.correctIndex && <CheckCircle2 className="mr-1 inline h-3 w-3" />}
+                      {c}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => useDraft(idx)}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-caption font-bold text-white hover:bg-primary-dark"
+                  >
+                    Dùng câu này (xem/sửa rồi lưu)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => discardDraft(idx)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-caption font-bold text-slate-500 hover:bg-slate-50"
+                  >
+                    Bỏ qua
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <form
         onSubmit={handleSubmit}

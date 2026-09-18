@@ -52,7 +52,7 @@ async function list(req, res, next) {
     if (req.query.status) filter.status = req.query.status;
     if (req.query.search) {
       const regex = new RegExp(req.query.search.trim(), "i");
-      filter.$or = [{ fullName: regex }, { email: regex }];
+      filter.$or = [{ fullName: regex }, { email: regex }, { username: regex }, { phone: regex }];
     }
     const users = await User.find(filter).populate("grade", "name").sort({ createdAt: -1 });
     res.json({ success: true, data: users.map(toAccountView) });
@@ -184,4 +184,44 @@ async function updateStatus(req, res, next) {
   }
 }
 
-module.exports = { listStudents, list, getOne, create, update, updateStatus };
+async function leaderboard(req, res, next) {
+  try {
+    const gradeId = req.user.grade;
+    const semester = Number(req.query.semester) || 1;
+    if (!gradeId) return res.json({ success: true, data: [] });
+
+    const students = await User.find({ grade: gradeId, role: "Student", isActive: true }).select(
+      "fullName username avatarUrl"
+    );
+    const studentIds = students.map((s) => s._id);
+
+    const attempts = await Attempt.find({ student: { $in: studentIds } })
+      .select("student score lesson")
+      .populate({ path: "lesson", select: "chapter", populate: { path: "chapter", select: "semester" } });
+
+    const scoreByStudent = new Map();
+    for (const a of attempts) {
+      const sem = a.lesson?.chapter?.semester || 1;
+      if (sem !== semester) continue;
+      const key = String(a.student);
+      scoreByStudent.set(key, (scoreByStudent.get(key) || 0) + a.score);
+    }
+
+    const rankings = students
+      .map((s) => ({
+        _id: s._id,
+        fullName: s.fullName,
+        username: s.username,
+        avatarUrl: s.avatarUrl,
+        score: scoreByStudent.get(String(s._id)) || 0,
+        isMe: String(s._id) === String(req.user._id),
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    res.json({ success: true, data: rankings });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { listStudents, list, getOne, create, update, updateStatus, leaderboard };

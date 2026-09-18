@@ -28,6 +28,8 @@ import {
   X,
   Sparkles,
   Bot,
+  Medal,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { gradeService } from "../../api/services";
@@ -46,6 +48,8 @@ const TOP_NAV_ITEMS = [
 ];
 
 const MORE_NAV_ITEMS = [
+  { to: "/xep-hang", label: "Bảng xếp hạng", Icon: Medal, color: "text-amber-500" },
+  { to: "/thong-ke", label: "Thống kê học tập", Icon: BarChart3, color: "text-secondary" },
   { to: "/dau-truong", label: "Đấu trường", Icon: Swords, color: "text-rose-500" },
   { to: "/tin-tuc", label: "Tin tức", Icon: Newspaper, color: "text-teal-500" },
   { to: "/lien-he", label: "Liên hệ", Icon: LifeBuoy, color: "text-red-500" },

@@ -1,9 +1,10 @@
 const express = require("express");
-const { listByLesson, getOne, create, update, remove } = require("../controllers/practiceSetController");
+const { list, listByLesson, getOne, create, update, remove } = require("../controllers/practiceSetController");
 const { protect, optionalAuth, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+router.get("/", protect, authorize("Admin"), list);
 router.get("/lesson/:lessonId", optionalAuth, listByLesson);
 router.get("/:id", optionalAuth, getOne);
 router.post("/", protect, authorize("Admin"), create);

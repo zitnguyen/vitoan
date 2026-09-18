@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Home, History, Star, CheckCircle2, XCircle, Sparkles, Award, ArrowLeft } from "lucide-react";
+import { Home, History, Star, CheckCircle2, XCircle, Sparkles, Award, ArrowLeft, Bot } from "lucide-react";
 import OwlMascot from "../illustrations/OwlMascot.jsx";
+import { testAttemptService } from "../../api/services";
 import { cn } from "../../lib/utils";
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
@@ -46,11 +48,54 @@ function ActionButtons({ guest, lessonId }) {
   );
 }
 
+function AiReviewCard({ attemptId }) {
+  const [review, setReview] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleRequest() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await testAttemptService.aiReview(attemptId);
+      setReview(res.data.review);
+    } catch (err) {
+      setError(err.apiMessage || "Chưa thể lấy nhận xét lúc này");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl bg-violet-50 p-5 ring-1 ring-violet-100">
+      <p className="flex items-center gap-1.5 font-display font-bold text-violet-700">
+        <Bot className="h-5 w-5" /> Nhận xét từ AI
+      </p>
+      {review ? (
+        <p className="mt-2 text-body text-violet-800">{review}</p>
+      ) : (
+        <>
+          {error && <p className="mt-2 text-caption text-red-600">{error}</p>}
+          <button
+            type="button"
+            onClick={handleRequest}
+            disabled={loading}
+            className="mt-3 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-violet-700 disabled:opacity-60"
+          >
+            {loading ? "Đang phân tích..." : "Xem nhận xét từ AI"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function QuizResultView({ attempt, guest = false, newBadges = [] }) {
   const percent = Math.round((attempt.score / attempt.totalQuestions) * 100);
   const tier = getTier(percent);
   const wrongCount = attempt.totalQuestions - attempt.score;
   const lessonId = attempt.lesson?._id || attempt.lesson;
+  const isTestAttempt = !!attempt.test;
 
   return (
     <div className="lg:grid lg:grid-cols-[22rem_1fr] lg:items-start lg:gap-8">
@@ -102,6 +147,8 @@ export default function QuizResultView({ attempt, guest = false, newBadges = [] 
             </div>
           </div>
         </div>
+
+        {isTestAttempt && <AiReviewCard attemptId={attempt._id} />}
 
         {newBadges?.length > 0 && (
           <div className="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-200">

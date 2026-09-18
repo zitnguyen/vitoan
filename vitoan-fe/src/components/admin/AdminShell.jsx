@@ -1,13 +1,42 @@
 import { Link, NavLink } from "react-router-dom";
-import { LayoutDashboard, BookOpen, ClipboardCheck, Users, LogOut, ArrowLeftCircle, User } from "lucide-react";
+import {
+  LayoutDashboard,
+  BookOpen,
+  ClipboardCheck,
+  Users,
+  Gift,
+  FileText,
+  HelpCircle,
+  PenLine,
+  LogOut,
+  ArrowLeftCircle,
+  User,
+} from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { cn } from "../../lib/utils";
 
-const LINKS = [
-  { to: "/admin", label: "Tổng quan", Icon: LayoutDashboard, end: true },
-  { to: "/admin/bai-hoc", label: "Bài học", Icon: BookOpen },
-  { to: "/admin/kiem-tra", label: "Kiểm tra", Icon: ClipboardCheck },
-  { to: "/admin/tai-khoan", label: "Tài khoản", Icon: Users },
+const LINK_GROUPS = [
+  {
+    title: null,
+    items: [{ to: "/admin", label: "Tổng quan", Icon: LayoutDashboard, end: true }],
+  },
+  {
+    title: "Nội dung học tập",
+    items: [
+      { to: "/admin/bai-hoc", label: "Bài học", Icon: BookOpen },
+      { to: "/admin/noi-dung-on-tap", label: "Nội dung ôn tập", Icon: FileText },
+      { to: "/admin/ngan-hang-cau-hoi", label: "Ngân hàng câu hỏi", Icon: HelpCircle },
+      { to: "/admin/danh-sach-luyen-tap", label: "Bài luyện tập", Icon: PenLine },
+      { to: "/admin/kiem-tra", label: "Kiểm tra", Icon: ClipboardCheck },
+    ],
+  },
+  {
+    title: "Vận hành",
+    items: [
+      { to: "/admin/doi-diem", label: "Đổi điểm", Icon: Gift },
+      { to: "/admin/tai-khoan", label: "Tài khoản", Icon: Users },
+    ],
+  },
 ];
 
 export default function AdminShell({ children }) {
@@ -26,22 +55,29 @@ export default function AdminShell({ children }) {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-3 py-4">
-          {LINKS.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.end}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
-                  isActive ? "bg-primary/10 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-                )
-              }
-            >
-              <link.Icon className="h-4.5 w-4.5" strokeWidth={2} />
-              {link.label}
-            </NavLink>
+        <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
+          {LINK_GROUPS.map((group, gi) => (
+            <div key={gi} className="space-y-0.5">
+              {group.title && (
+                <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{group.title}</p>
+              )}
+              {group.items.map((link) => (
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  end={link.end}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                      isActive ? "bg-primary/10 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                    )
+                  }
+                >
+                  <link.Icon className="h-4.5 w-4.5" strokeWidth={2} />
+                  {link.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 

@@ -106,7 +106,7 @@ export default function AdminPracticeSetsPage() {
         <p className="mt-6 text-body text-slate-500">
           Bài học này chưa có câu hỏi. Hãy{" "}
           <Link to={`/admin/bai-hoc/${lessonId}/cau-hoi`} className="font-semibold text-primary hover:underline">
-            thêm câu hỏi
+            thêm câu hỏi (có thể dùng AI để tạo nhanh)
           </Link>{" "}
           trước khi tạo bài luyện tập.
         </p>

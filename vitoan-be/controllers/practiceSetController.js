@@ -7,6 +7,52 @@ function stripQuestion(question) {
   return { _id, type, text, audioText, imageUrl, choices, difficulty, order };
 }
 
+async function list(req, res, next) {
+  try {
+    const filter = {};
+    if (req.query.search) filter.title = new RegExp(req.query.search.trim(), "i");
+    if (req.query.level) filter.level = req.query.level;
+    if (req.query.status === "draft") filter.isPublished = false;
+    else if (req.query.status === "published") filter.isPublished = true;
+
+    if (req.query.subject || req.query.grade || req.query.chapter) {
+      const lessonFilter = {};
+      if (req.query.subject) lessonFilter.subject = req.query.subject;
+      if (req.query.grade) lessonFilter.grade = req.query.grade;
+      if (req.query.chapter) lessonFilter.chapter = req.query.chapter;
+      const lessonIds = await Lesson.find(lessonFilter).distinct("_id");
+      filter.lesson = { $in: lessonIds };
+    }
+
+    const sets = await PracticeSet.find(filter)
+      .populate({
+        path: "lesson",
+        select: "title subject grade chapter",
+        populate: [
+          { path: "subject", select: "name" },
+          { path: "grade", select: "name" },
+          { path: "chapter", select: "title" },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .limit(200);
+
+    const data = sets.map((set) => ({
+      _id: set._id,
+      lesson: set.lesson,
+      title: set.title,
+      level: set.level,
+      order: set.order,
+      questionCount: set.questions.length,
+      timeLimitSeconds: set.timeLimitSeconds,
+      isPublished: set.isPublished,
+    }));
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function listByLesson(req, res, next) {
   try {
     const lesson = await Lesson.findById(req.params.lessonId).select("isTrial");
@@ -111,4 +157,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { listByLesson, getOne, create, update, remove };
+module.exports = { list, listByLesson, getOne, create, update, remove };

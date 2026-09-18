@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, X, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, X, Trash2, Sparkles } from "lucide-react";
 import { lessonService, reviewContentService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
@@ -17,6 +17,24 @@ export default function AdminReviewContentPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  async function handleGenerate() {
+    setError("");
+    setGenerating(true);
+    try {
+      const res = await reviewContentService.aiGenerate({ lessonId });
+      setForm((f) => ({
+        ...f,
+        content: res.data.content || f.content,
+        examples: Array.isArray(res.data.examples) && res.data.examples.length ? res.data.examples : f.examples,
+      }));
+    } catch (err) {
+      setError(err.apiMessage || "Không thể tạo nội dung bằng AI lúc này");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   useEffect(() => {
     Promise.all([lessonService.getOne(lessonId), reviewContentService.getByLesson(lessonId).catch(() => ({ data: null }))]).then(
@@ -95,10 +113,22 @@ export default function AdminReviewContentPage() {
       <Link to="/admin/bai-hoc" className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
         <ArrowLeft className="h-4 w-4" /> Quay lại danh sách bài học
       </Link>
-      <h1 className="mt-2 font-display text-h2 text-slate-800">Ôn tập: {lesson?.title}</h1>
-      <p className="mt-1 text-caption text-slate-500">
-        Nội dung "kiến thức cần nhớ" hiển thị cho học sinh trước khi làm bài luyện tập.
-      </p>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-h2 text-slate-800">Ôn tập: {lesson?.title}</h1>
+          <p className="mt-1 text-caption text-slate-500">
+            Nội dung "kiến thức cần nhớ" hiển thị cho học sinh trước khi làm bài luyện tập.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleGenerate}
+          disabled={generating}
+          className="flex shrink-0 items-center gap-1.5 rounded-xl bg-violet-100 px-4 py-2.5 text-sm font-bold text-violet-700 transition hover:bg-violet-200 disabled:opacity-60"
+        >
+          <Sparkles className="h-4 w-4" /> {generating ? "Đang tạo..." : "Tạo bằng AI"}
+        </button>
+      </div>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4 rounded-2xl bg-white p-6 shadow-elevation-1 ring-1 ring-slate-100">
         <div>
