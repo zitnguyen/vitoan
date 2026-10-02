@@ -21,6 +21,10 @@ function toPublicUser(user) {
     role: user.role,
     grade: user.grade,
     points: user.points || 0,
+    equippedFrame: user.equippedFrame || "",
+    equippedTitle: user.equippedTitle || "",
+    nameColor: user.nameColor || "",
+    vipUntil: user.vipUntil || null,
   };
 }
 

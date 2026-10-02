@@ -11,6 +11,7 @@ export default function TestResultPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     testAttemptService.getOne(attemptId).then((res) => {
       setAttempt(res.data);
       setLoading(false);
@@ -29,7 +30,17 @@ export default function TestResultPage() {
 
   return (
     <QuizResultLayout>
-      <QuizResultView attempt={attempt} />
+      <QuizResultView
+        attempt={attempt}
+        heading={[attempt.test?.subject?.name, attempt.test?.grade?.name, attempt.test?.title].filter(Boolean).join(" · ")}
+        backTo={
+          attempt.test?.chapter && attempt.test?.grade?.slug && attempt.test?.subject?.slug
+            ? `/lop/${attempt.test.grade.slug}/${attempt.test.subject.slug}?chu-de=${attempt.test.chapter._id}`
+            : "/kiem-tra"
+        }
+        backLabel={attempt.test?.chapter ? "Về chủ đề" : "Về danh sách kiểm tra"}
+        retryTo={attempt.test?._id ? `/kiem-tra/${attempt.test._id}` : undefined}
+      />
     </QuizResultLayout>
   );
 }

@@ -1,6 +1,22 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
-const { submit, submitGuest, getOne, myHistory, completedLessons, lessonStatus, stats } = require("../controllers/attemptController");
+const {
+  submit,
+  submitGuest,
+  getOne,
+  myHistory,
+  completedLessons,
+  lessonStatus,
+  stats,
+  getProgress,
+  saveProgress,
+  clearProgress,
+  myProgressList,
+  myWeakKnowledge,
+  getLearning,
+  saveLearning,
+  getRecord,
+} = require("../controllers/attemptController");
 const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
@@ -19,6 +35,14 @@ router.get("/me", protect, authorize("Student"), myHistory);
 router.get("/completed-lessons", protect, authorize("Student"), completedLessons);
 router.get("/lesson-status", protect, authorize("Student"), lessonStatus);
 router.get("/stats", protect, authorize("Student"), stats);
+router.get("/record", protect, authorize("Student"), getRecord);
+router.get("/learning", protect, authorize("Student"), getLearning);
+router.put("/learning", protect, authorize("Student"), saveLearning);
+router.get("/weak-knowledge", protect, authorize("Student"), myWeakKnowledge);
+router.get("/progress", protect, authorize("Student"), getProgress);
+router.put("/progress", protect, authorize("Student"), saveProgress);
+router.delete("/progress", protect, authorize("Student"), clearProgress);
+router.get("/progress/me", protect, authorize("Student"), myProgressList);
 router.get("/:id", protect, getOne);
 
 module.exports = router;

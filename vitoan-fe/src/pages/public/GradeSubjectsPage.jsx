@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Divide, BookOpenText, BookMarked } from "lucide-react";
+import { Divide, BookOpenText, BookMarked } from "../../components/ui/icons.jsx";
 import { gradeService, subjectService } from "../../api/services";
 import Spinner from "../../components/ui/Spinner.jsx";
+import PageHeader, { HeaderStat } from "../../components/ui/PageHeader.jsx";
 
 const SUBJECT_STYLES = {
   toan: { color: "from-secondary to-blue-600", label: "Toán", Icon: Divide },
@@ -32,13 +33,15 @@ export default function GradeSubjectsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-16">
-      <h1 className="text-center font-display text-h2 text-slate-800">
-        {grade ? grade.name : "Chọn lớp"} — Chọn môn học
-      </h1>
-      <p className="mt-2 text-center text-body text-slate-500">Chọn môn học em muốn luyện tập hôm nay</p>
+    <div className="page">
+      <PageHeader
+        icon={BookMarked}
+        tone="green"
+        title={`${grade ? grade.name : "Chọn lớp"} — Chọn môn học`}
+        subtitle="Chọn môn học em muốn luyện tập hôm nay"
+      />
 
-      <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
         {subjects.map((subject) => {
           const style = SUBJECT_STYLES[subject.slug] || { color: "from-primary to-primary-dark", label: subject.name, Icon: BookMarked };
           return (

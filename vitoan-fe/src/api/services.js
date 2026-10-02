@@ -54,6 +54,8 @@ export const userService = {
   update: (id, payload) => axiosClient.put(`/users/${id}`, payload),
   updateStatus: (id, status) => axiosClient.put(`/users/${id}/status`, { status }),
   leaderboard: (semester) => axiosClient.get("/users/leaderboard", { params: { semester } }),
+  publicLeaderboard: (grade) => axiosClient.get("/users/leaderboard/public", { params: { grade } }),
+  publicStats: () => axiosClient.get("/users/stats/public"),
 };
 
 export const reviewContentService = {
@@ -76,10 +78,17 @@ export const missionService = {
   claim: (id) => axiosClient.post(`/missions/${id}/claim`),
 };
 
+export const checkinService = {
+  status: () => axiosClient.get("/checkin"),
+  checkIn: () => axiosClient.post("/checkin"),
+};
+
 export const rewardService = {
   list: () => axiosClient.get("/rewards"),
   myRedemptions: () => axiosClient.get("/rewards/me"),
   redeem: (id) => axiosClient.post(`/rewards/${id}/redeem`),
+  inventory: () => axiosClient.get("/rewards/inventory"),
+  equip: (type, rewardId) => axiosClient.post("/rewards/equip", { type, rewardId: rewardId || null }),
   create: (payload) => axiosClient.post("/rewards", payload),
   update: (id, payload) => axiosClient.put(`/rewards/${id}`, payload),
   remove: (id) => axiosClient.delete(`/rewards/${id}`),
@@ -100,6 +109,30 @@ export const attemptService = {
   completedLessons: () => axiosClient.get("/attempts/completed-lessons"),
   lessonStatus: (chapter) => axiosClient.get("/attempts/lesson-status", { params: { chapter } }),
   stats: () => axiosClient.get("/attempts/stats"),
+  weakKnowledge: (params) => axiosClient.get("/attempts/weak-knowledge", { params }),
+  record: (params) => axiosClient.get("/attempts/record", { params }),
+  getLearning: (lesson) => axiosClient.get("/attempts/learning", { params: { lesson } }),
+  saveLearning: (payload) => axiosClient.put("/attempts/learning", payload),
+  // Lưu khi trang sắp đóng (keepalive: request vẫn được gửi dù tab đã huỷ).
+  saveLearningKeepalive: (payload) => {
+    let token = null;
+    try {
+      token = JSON.parse(localStorage.getItem("vitoan_auth") || "null")?.accessToken;
+    } catch {
+      // bỏ qua
+    }
+    return fetch(`${import.meta.env.VITE_API_URL || "/api"}/attempts/learning`, {
+      method: "PUT",
+      keepalive: true,
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  },
+  getProgress: (params) => axiosClient.get("/attempts/progress", { params }),
+  saveProgress: (payload) => axiosClient.put("/attempts/progress", payload),
+  clearProgress: (params) => axiosClient.delete("/attempts/progress", { params }),
+  myProgressList: () => axiosClient.get("/attempts/progress/me"),
 };
 
 export const practiceSetService = {
@@ -121,6 +154,7 @@ export const testService = {
 
 export const adminStatsService = {
   overview: () => axiosClient.get("/admin/stats"),
+  lookup: (id) => axiosClient.get(`/admin/lookup/${encodeURIComponent(id)}`),
 };
 
 export const commentService = {
@@ -133,6 +167,25 @@ export const commentService = {
 export const testAttemptService = {
   submit: (payload) => axiosClient.post("/test-attempts", payload),
   getOne: (id) => axiosClient.get(`/test-attempts/${id}`),
-  myHistory: () => axiosClient.get("/test-attempts/me"),
+  myHistory: (params) => axiosClient.get("/test-attempts/me", { params }),
   aiReview: (id) => axiosClient.post(`/test-attempts/${id}/ai-review`),
+};
+
+export const articleService = {
+  list: (params) => axiosClient.get("/articles", { params }),
+  getOne: (id) => axiosClient.get(`/articles/${id}`),
+  create: (payload) => axiosClient.post("/articles", payload),
+  update: (id, payload) => axiosClient.put(`/articles/${id}`, payload),
+  remove: (id) => axiosClient.delete(`/articles/${id}`),
+  feeds: () => axiosClient.get("/articles/feeds"),
+  previewFeed: (key) => axiosClient.get(`/articles/feeds/${key}`),
+  importItems: (payload) => axiosClient.post("/articles/import", payload),
+};
+
+export const uploadService = {
+  image: (file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    return axiosClient.post("/uploads/image", formData, { headers: { "Content-Type": "multipart/form-data" } });
+  },
 };

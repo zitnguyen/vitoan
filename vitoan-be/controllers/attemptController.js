@@ -4,8 +4,62 @@ const Lesson = require("../models/Lesson");
 const Subject = require("../models/Subject");
 const Badge = require("../models/Badge");
 const StudentBadge = require("../models/StudentBadge");
+const User = require("../models/User");
+const PracticeProgress = require("../models/PracticeProgress");
+const TestAttempt = require("../models/TestAttempt");
 const { gradeAnswer } = require("../utils/grading");
 const { computeBadgeStats, computeStreak } = require("../utils/badgeStats");
+const {
+  PASS_PERCENT,
+  VIDEO_DONE_RATIO,
+  videoBucketTotal,
+  lessonProgressMap,
+  passedLessonIds,
+  learningForLessons,
+} = require("../utils/progress");
+const LessonProgress = require("../models/LessonProgress");
+const { levelRemark, breakdownByLesson, weakKnowledge } = require("../utils/analysis");
+
+// Điểm tích luỹ khi luyện tập: chỉ cộng phần tiến bộ so với lần tốt nhất trước đó của
+// cùng bài (10 điểm/câu đúng thêm, +20 lần đầu đạt tuyệt đối) — khuyến khích làm tốt
+// hơn thay vì làm đi làm lại một bài dễ để "cày" điểm đổi quà.
+const POINTS_PER_CORRECT = 10;
+const PERFECT_BONUS = 20;
+
+// Kỷ lục trước đó của học sinh ở 1 bài luyện tập (theo bộ luyện tập nếu có, không thì theo bài học).
+async function practiceRecord(studentId, { lesson, practiceSet }, excludeId) {
+  const filter = { student: studentId };
+  if (excludeId) filter._id = { $ne: excludeId };
+  if (practiceSet) filter.practiceSet = practiceSet;
+  else {
+    filter.lesson = lesson;
+    filter.practiceSet = { $exists: false };
+  }
+  const previous = await Attempt.find(filter).select("score totalQuestions").lean();
+  return {
+    best: previous.reduce((m, a) => Math.max(m, a.score), 0),
+    hadPerfect: previous.some((a) => a.totalQuestions > 0 && a.score === a.totalQuestions),
+    attempts: previous.length,
+  };
+}
+
+async function practicePointsEarned(studentId, attempt) {
+  const { best: prevBest, hadPerfect } = await practiceRecord(studentId, attempt, attempt._id);
+  let points = Math.max(0, attempt.score - prevBest) * POINTS_PER_CORRECT;
+  if (attempt.score === attempt.totalQuestions && attempt.totalQuestions > 0 && !hadPerfect) points += PERFECT_BONUS;
+  return { points, previousBest: prevBest, hadPerfect };
+}
+
+// GET /attempts/record?lesson=&practiceSet= — kỷ lục + luật tính điểm, để trang làm bài báo trước cho bé.
+async function getRecord(req, res, next) {
+  try {
+    if (!req.query.lesson && !req.query.practiceSet) return res.status(400).json({ success: false, message: "Thiếu tham số lesson" });
+    const record = await practiceRecord(req.user._id, { lesson: req.query.lesson, practiceSet: req.query.practiceSet });
+    res.json({ success: true, data: { ...record, pointsPerCorrect: POINTS_PER_CORRECT, perfectBonus: PERFECT_BONUS } });
+  } catch (err) {
+    next(err);
+  }
+}
 
 async function checkAndAwardBadges(studentId) {
   const badges = await Badge.find({ isActive: true });
@@ -57,9 +111,150 @@ async function submit(req, res, next) {
       durationSeconds: durationSeconds || 0,
     });
 
+    const { points: pointsEarned, previousBest, hadPerfect } = await practicePointsEarned(req.user._id, attempt);
+    let totalPoints;
+    if (pointsEarned > 0) {
+      const updated = await User.findByIdAndUpdate(
+        req.user._id,
+        { $inc: { points: pointsEarned } },
+        { returnDocument: "after" }
+      ).select("points");
+      totalPoints = updated.points;
+    }
     const newBadges = await checkAndAwardBadges(req.user._id);
+    await PracticeProgress.deleteOne({ student: req.user._id, lesson, practiceSet: practiceSet || null });
 
-    res.status(201).json({ success: true, data: attempt, newBadges });
+    res.status(201).json({ success: true, data: attempt, newBadges, pointsEarned, totalPoints, previousBest, hadPerfect });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ===== Lộ trình làm bài luyện tập (lưu tiến trình để thoát ra vẫn làm tiếp được) =====
+function progressKey(req, source) {
+  return { student: req.user._id, lesson: source.lesson, practiceSet: source.practiceSet || null };
+}
+
+async function getProgress(req, res, next) {
+  try {
+    if (!req.query.lesson) return res.status(400).json({ success: false, message: "Thiếu tham số lesson" });
+    const progress = await PracticeProgress.findOne(progressKey(req, req.query));
+    res.json({ success: true, data: progress });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function saveProgress(req, res, next) {
+  try {
+    const { lesson, questionOrder, answers, current, elapsedSeconds } = req.body;
+    if (!lesson || !Array.isArray(questionOrder)) {
+      return res.status(400).json({ success: false, message: "Thiếu dữ liệu tiến trình" });
+    }
+    const list = Array.isArray(answers) ? answers : [];
+    const questions = await Question.find({ _id: { $in: list.map((a) => a.question) } });
+    const questionMap = new Map(questions.map((q) => [String(q._id), q]));
+    // Chấm lại phía server — không tin cờ "correct" do client gửi lên.
+    const graded = list.map((a) => ({
+      question: a.question,
+      selectedIndex: a.selectedIndex ?? -1,
+      textAnswer: a.textAnswer || "",
+      correct: gradeAnswer(questionMap.get(String(a.question)), a),
+    }));
+    const progress = await PracticeProgress.findOneAndUpdate(
+      progressKey(req, req.body),
+      { questionOrder, answers: graded, current: current || 0, elapsedSeconds: elapsedSeconds || 0 },
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+    );
+    res.json({ success: true, data: progress });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function clearProgress(req, res, next) {
+  try {
+    if (!req.query.lesson) return res.status(400).json({ success: false, message: "Thiếu tham số lesson" });
+    await PracticeProgress.deleteOne(progressKey(req, req.query));
+    res.json({ success: true, data: null });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function myProgressList(req, res, next) {
+  try {
+    const list = await PracticeProgress.find({ student: req.user._id })
+      .sort({ updatedAt: -1 })
+      .limit(20)
+      .populate("lesson", "title subject grade chapter")
+      .populate("practiceSet", "title");
+    res.json({
+      success: true,
+      data: list
+        .filter((p) => p.lesson)
+        .map((p) => ({
+          _id: p._id,
+          lesson: p.lesson,
+          practiceSet: p.practiceSet,
+          answered: p.answers.length,
+          total: p.questionOrder.length,
+          correct: p.answers.filter((a) => a.correct).length,
+          updatedAt: p.updatedAt,
+        })),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ===== Tiến độ học 1 bài: xem video, đọc lý thuyết, luyện tập =====
+async function getLearning(req, res, next) {
+  try {
+    if (!req.query.lesson) return res.status(400).json({ success: false, message: "Thiếu tham số lesson" });
+    const map = await learningForLessons(req.user._id, [req.query.lesson]);
+    res.json({ success: true, data: map.get(String(req.query.lesson)) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function saveLearning(req, res, next) {
+  try {
+    const { lesson, videoBuckets, videoPosition, videoDuration, theoryDone } = req.body;
+    if (!lesson) return res.status(400).json({ success: false, message: "Thiếu tham số lesson" });
+    const lp = (await LessonProgress.findOne({ student: req.user._id, lesson })) || new LessonProgress({ student: req.user._id, lesson });
+    if (Number(videoDuration) > 0) lp.videoDuration = Math.round(Number(videoDuration));
+    if (videoPosition !== undefined && Number(videoPosition) >= 0) lp.videoPosition = Math.round(Number(videoPosition));
+    // Gộp các đoạn video vừa xem (chỉ nhận chỉ số hợp lệ trong độ dài video).
+    if (Array.isArray(videoBuckets) && videoBuckets.length) {
+      const total = videoBucketTotal(lp.videoDuration);
+      const merged = new Set(lp.videoBuckets);
+      for (const b of videoBuckets) {
+        const i = Number(b);
+        if (Number.isInteger(i) && i >= 0 && (!total || i < total)) merged.add(i);
+      }
+      lp.videoBuckets = [...merged].sort((a, b) => a - b);
+      if (total && lp.videoBuckets.length / total >= VIDEO_DONE_RATIO) lp.videoDone = true;
+    }
+    if (theoryDone !== undefined) lp.theoryDone = !!theoryDone;
+    await lp.save();
+    const map = await learningForLessons(req.user._id, [lesson]);
+    res.json({ success: true, data: map.get(String(lesson)) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Thống kê lỗi sai (luyện tập + kiểm tra) gom theo bài học/chủ đề, kèm nhận xét.
+async function myWeakKnowledge(req, res, next) {
+  try {
+    const [attempts, testAttempts] = await Promise.all([
+      Attempt.find({ student: req.user._id }).select("answers").lean(),
+      TestAttempt.find({ student: req.user._id }).select("answers").lean(),
+    ]);
+    const data = await weakKnowledge([...attempts, ...testAttempts], { subject: req.query.subject });
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
@@ -120,15 +315,31 @@ async function submitGuest(req, res, next) {
 
 async function getOne(req, res, next) {
   try {
-    const attempt = await Attempt.findById(req.params.id).populate({
-      path: "answers.question",
-      select: "type text choices correctIndex correctText explanation",
-    });
+    const attempt = await Attempt.findById(req.params.id)
+      .populate({ path: "answers.question", select: "type text imageUrl choices correctIndex correctText explanation" })
+      .populate({
+        path: "lesson",
+        select: "title subject grade chapter",
+        populate: [
+          { path: "subject", select: "name slug" },
+          { path: "grade", select: "name slug" },
+        ],
+      })
+      .populate("practiceSet", "title");
     if (!attempt) return res.status(404).json({ success: false, message: "Không tìm thấy lượt làm bài" });
     if (String(attempt.student) !== String(req.user._id) && req.user.role !== "Admin") {
       return res.status(403).json({ success: false, message: "Không có quyền xem" });
     }
-    res.json({ success: true, data: attempt });
+    const percent = attempt.totalQuestions ? Math.round((attempt.score / attempt.totalQuestions) * 100) : 0;
+    const data = attempt.toObject();
+    data.feedback = {
+      percent,
+      ...levelRemark(percent),
+      passed: percent >= PASS_PERCENT,
+      passPercent: PASS_PERCENT,
+      byLesson: await breakdownByLesson(attempt.answers),
+    };
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
@@ -136,8 +347,9 @@ async function getOne(req, res, next) {
 
 async function completedLessons(req, res, next) {
   try {
-    const lessonIds = await Attempt.distinct("lesson", { student: req.user._id });
-    res.json({ success: true, data: lessonIds });
+    // Chỉ các bài học đã đạt điều kiện hoàn thành (xem utils/progress.js).
+    const lessonIds = await passedLessonIds(req.user._id);
+    res.json({ success: true, data: lessonIds, passPercent: PASS_PERCENT });
   } catch (err) {
     next(err);
   }
@@ -149,22 +361,25 @@ async function lessonStatus(req, res, next) {
     if (!chapter) return res.status(400).json({ success: false, message: "Thiếu tham số chapter" });
 
     const lessons = await Lesson.find({ chapter, isPublished: true }).sort({ order: 1, createdAt: 1 });
-    const completedIds = new Set(
-      (
-        await Attempt.distinct("lesson", { student: req.user._id, lesson: { $in: lessons.map((l) => l._id) } })
-      ).map(String)
-    );
+    const ids = lessons.map((l) => l._id);
+    const [progress, learning] = await Promise.all([lessonProgressMap(req.user._id, ids), learningForLessons(req.user._id, ids)]);
 
-    let prevCompleted = true;
+    // completed = luyện tập đạt >= PASS_PERCENT; learning = đã bắt đầu học (xem video, đọc
+    // lý thuyết hoặc làm bài) nhưng chưa đạt; new = chưa làm gì.
     const data = lessons.map((lesson) => {
-      const completed = completedIds.has(String(lesson._id));
-      const unlocked = prevCompleted;
-      const status = completed ? "completed" : unlocked ? "in_progress" : "locked";
-      prevCompleted = completed;
-      return { lesson: lesson._id, status };
+      const p = progress.get(String(lesson._id));
+      const l = learning.get(String(lesson._id));
+      const status = p?.passed ? "completed" : p || l?.percent > 0 ? "learning" : "new";
+      return {
+        lesson: lesson._id,
+        status,
+        bestPercent: p?.bestPercent ?? null,
+        attempts: p?.attempts || 0,
+        learnPercent: l?.percent || 0,
+      };
     });
 
-    res.json({ success: true, data });
+    res.json({ success: true, data, passPercent: PASS_PERCENT });
   } catch (err) {
     next(err);
   }
@@ -173,7 +388,8 @@ async function lessonStatus(req, res, next) {
 async function myHistory(req, res, next) {
   try {
     const attempts = await Attempt.find({ student: req.user._id })
-      .populate("lesson", "title")
+      .populate({ path: "lesson", select: "title subject", populate: { path: "subject", select: "name slug" } })
+      .populate("practiceSet", "title")
       .sort({ createdAt: -1 })
       .limit(50);
     res.json({ success: true, data: attempts });
@@ -239,4 +455,20 @@ async function stats(req, res, next) {
   }
 }
 
-module.exports = { submit, submitGuest, getOne, myHistory, completedLessons, lessonStatus, stats };
+module.exports = {
+  submit,
+  submitGuest,
+  getOne,
+  myHistory,
+  completedLessons,
+  lessonStatus,
+  stats,
+  getProgress,
+  saveProgress,
+  clearProgress,
+  myProgressList,
+  myWeakKnowledge,
+  getRecord,
+  getLearning,
+  saveLearning,
+};

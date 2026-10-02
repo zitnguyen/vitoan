@@ -4,7 +4,7 @@ const { protect, optionalAuth, authorize } = require("../middleware/authMiddlewa
 
 const router = express.Router();
 
-router.get("/", list);
+router.get("/", optionalAuth, list);
 router.get("/:id", optionalAuth, getOne);
 router.post("/:id/like", protect, toggleLike);
 router.post("/", protect, authorize("Admin"), create);

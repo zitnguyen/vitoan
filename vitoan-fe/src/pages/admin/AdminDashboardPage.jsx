@@ -38,7 +38,7 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="mx-auto max-w-6xl xl:max-w-none xl:px-10 2xl:px-16 px-6 py-6">
       <h1 className="font-display text-h2 text-slate-800">Tổng quan</h1>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

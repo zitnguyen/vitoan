@@ -76,10 +76,10 @@ export default function AdminQuestionBankPage() {
   }, [search, filterSubject, filterGrade, filterChapter, filterDifficulty, filterType]);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-6xl xl:max-w-none xl:px-10 2xl:px-16 px-6 py-6">
       <h1 className="font-display text-h2 text-slate-800">Ngân hàng câu hỏi</h1>
       <p className="mt-1 text-caption text-slate-500">
-        Tìm kiếm câu hỏi trên toàn hệ thống. Bấm vào một câu để tới trang quản lý câu hỏi của bài học đó.
+        Tìm câu hỏi trên toàn hệ thống (tối đa 200 kết quả). Bấm vào một câu để mở ngay form sửa câu đó.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-3">
@@ -146,7 +146,7 @@ export default function AdminQuestionBankPage() {
           {questions.map((q) => (
             <Link
               key={q._id}
-              to={q.lesson?._id ? `/admin/bai-hoc/${q.lesson._id}/cau-hoi` : "#"}
+              to={q.lesson?._id ? `/admin/bai-hoc/${q.lesson._id}/cau-hoi?q=${q._id}` : "#"}
               className="flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-elevation-1 ring-1 ring-slate-100 transition hover:ring-primary/30"
             >
               <div className="min-w-0">

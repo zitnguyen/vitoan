@@ -93,6 +93,17 @@ export function AuthProvider({ children }) {
     return res.data.user;
   }, []);
 
+  // Quay lại tab (vd sau khi đổi quà/làm bài ở tab khác) → cập nhật điểm, khung, danh hiệu trên header.
+  const isLoggedIn = !!user;
+  useEffect(() => {
+    if (!isLoggedIn) return undefined;
+    function onVisible() {
+      if (document.visibilityState === "visible") refreshUser().catch(() => {});
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [isLoggedIn, refreshUser]);
+
   const logout = useCallback(async () => {
     try {
       await axiosClient.post("/auth/logout");

@@ -11,11 +11,14 @@ import {
   ChevronRight,
   ShieldCheck,
   Camera,
-} from "lucide-react";
+} from "../../components/ui/icons.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import { gradeService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
+import UserAvatar from "../../components/common/UserAvatar.jsx";
+import UserName from "../../components/common/UserName.jsx";
+import { Img3D } from "../../lib/icons3d.jsx";
 
 function FieldError({ message }) {
   if (!message) return null;
@@ -152,58 +155,58 @@ export default function ProfilePage() {
     "mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-slate-800 transition focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20";
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12">
+    <div className="page">
       {/* Header */}
-      <div className="flex items-center gap-5 rounded-3xl bg-white p-6 shadow-elevation-1 ring-1 ring-slate-100 sm:p-7">
-        <div className="relative shrink-0">
-          {user?.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              alt=""
-              className="h-20 w-20 rounded-full object-cover ring-4 ring-slate-100"
+      <div className="relative overflow-clip rounded-[2rem] p-6 sm:p-8" style={{ background: "linear-gradient(120deg,#d4ecff 0%,#e7dcff 55%,#ffdcee 100%)" }}>
+        <div aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/45 blur-2xl" />
+        <Img3D name="star" className="pointer-events-none absolute right-8 top-6 hidden h-12 w-12 animate-[float-soft_4s_ease-in-out_infinite] sm:block" />
+        <Img3D name="cap" className="pointer-events-none absolute bottom-5 right-24 hidden h-14 w-14 rotate-12 sm:block" />
+        <div className="relative flex items-center gap-5">
+          <div className="relative shrink-0 rounded-full bg-white p-1.5 shadow-lg">
+            <UserAvatar user={user} size="h-24 w-24" decoSize="text-2xl" />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarUploading}
+              aria-label="Đổi ảnh đại diện"
+              className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-elevation-1 ring-2 ring-white transition hover:bg-primary-dark disabled:opacity-60"
+            >
+              <Camera className="h-4 w-4" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarChange}
             />
-          ) : (
-            <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary ring-4 ring-slate-100">
-              <User className="h-9 w-9" strokeWidth={1.75} />
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={avatarUploading}
-            aria-label="Đổi ảnh đại diện"
-            className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-elevation-1 ring-2 ring-white transition hover:bg-primary-dark disabled:opacity-60"
-          >
-            <Camera className="h-4 w-4" />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleAvatarChange}
-          />
-        </div>
-        <div className="min-w-0">
-          <p className="text-caption font-semibold uppercase tracking-wide text-slate-400">Hồ sơ của em</p>
-          <h1 className="truncate font-display text-h3 text-slate-800">{form.fullName || user?.username}</h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
-              @{user?.username}
-            </span>
-            {user?.grade?.name && (
-              <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
-                <GraduationCap className="h-3.5 w-3.5" /> {user.grade.name}
-              </span>
-            )}
           </div>
-          {avatarUploading && <p className="mt-1 text-caption text-primary">Đang tải ảnh lên...</p>}
+          <div className="min-w-0">
+            <p className="text-sm font-black uppercase tracking-wide text-slate-500">Hồ sơ của em</p>
+            <h1 className="mt-1 font-display text-3xl font-black sm:text-4xl">
+              <UserName user={user} name={form.fullName || user?.username} className="text-3xl sm:text-4xl" />
+            </h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-white/85 px-3 py-1 text-sm font-bold text-slate-500">
+                @{user?.username}
+              </span>
+              <span className="flex items-center gap-1 rounded-full bg-white/85 px-3 py-1 text-sm font-black text-sky-600">
+                <Img3D name="gem" className="h-4 w-4" /> {(user?.points ?? 0).toLocaleString("vi-VN")} điểm
+              </span>
+              {user?.grade?.name && (
+                <span className="flex items-center gap-1 rounded-full bg-white/85 px-3 py-1 text-sm font-black text-primary">
+                  <GraduationCap className="h-3.5 w-3.5" /> {user.grade.name}
+                </span>
+              )}
+            </div>
+            {avatarUploading && <p className="mt-1 text-caption font-bold text-primary">Đang tải ảnh lên...</p>}
+          </div>
         </div>
       </div>
 
       {/* Grade card */}
       {user?.role === "Student" && (
-        <div className="mt-6 rounded-3xl bg-white p-6 shadow-elevation-1 ring-1 ring-slate-100 sm:p-8">
+        <div className="mt-6 rounded-3xl bg-white p-6 shadow-elevation-1 sm:p-8">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary/10 text-secondary">
               <GraduationCap className="h-4.5 w-4.5" strokeWidth={2} />
@@ -243,7 +246,7 @@ export default function ProfilePage() {
       <form
         onSubmit={handleSubmit}
         noValidate
-        className="mt-6 rounded-3xl bg-white p-6 shadow-elevation-1 ring-1 ring-slate-100 sm:p-8"
+        className="mt-6 rounded-3xl bg-white p-6 shadow-elevation-1 sm:p-8"
       >
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -304,7 +307,7 @@ export default function ProfilePage() {
       {/* Security */}
       <Link
         to="/doi-mat-khau"
-        className="group mt-6 flex items-center gap-4 rounded-3xl bg-white p-5 shadow-elevation-1 ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-elevation-2 hover:ring-primary/30"
+        className="group mt-6 flex items-center gap-4 rounded-3xl bg-white p-5 shadow-elevation-1 transition hover:-translate-y-0.5 hover:shadow-elevation-2 hover:ring-primary/30"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-vietnamese/10 text-vietnamese">
           <ShieldCheck className="h-5 w-5" strokeWidth={2} />

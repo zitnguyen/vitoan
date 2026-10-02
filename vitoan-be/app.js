@@ -28,8 +28,11 @@ const adminStatsRoutes = require("./routes/adminStatsRoutes");
 const commentRoutes = require("./routes/commentRoutes");
 const ttsRoutes = require("./routes/ttsRoutes");
 const missionRoutes = require("./routes/missionRoutes");
+const checkinRoutes = require("./routes/checkinRoutes");
 const rewardRoutes = require("./routes/rewardRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const uploadRoutes = require("./routes/uploadRoutes");
+const articleRoutes = require("./routes/articleRoutes");
 
 const app = express();
 
@@ -53,12 +56,22 @@ app.use(
 app.use(helmet());
 app.use(compression());
 
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500 });
+// Khi dev (không phải production) nới giới hạn để test/tải lại trang nhiều không bị chặn 429.
+const isProduction = process.env.NODE_ENV === "production";
+const RATE_LIMIT_MESSAGE = { success: false, message: "Quá nhiều yêu cầu, vui lòng thử lại sau ít phút" };
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProduction ? 500 : 10000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: RATE_LIMIT_MESSAGE,
+});
 app.use("/api", apiLimiter);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: isProduction ? 20 : 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: "Quá nhiều yêu cầu, vui lòng thử lại sau ít phút" },
@@ -106,7 +119,10 @@ app.use("/api/test-attempts", testAttemptRoutes);
 app.use("/api/admin", adminStatsRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/tts", ttsRoutes);
+app.use("/api/uploads", uploadRoutes);
+app.use("/api/articles", articleRoutes);
 app.use("/api/missions", missionRoutes);
+app.use("/api/checkin", checkinRoutes);
 app.use("/api/rewards", rewardRoutes);
 app.use("/api/conversations", chatRoutes);
 

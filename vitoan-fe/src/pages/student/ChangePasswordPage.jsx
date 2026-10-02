@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Lock, AlertCircle } from "lucide-react";
+import { Lock, AlertCircle } from "../../components/ui/icons.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import Button from "../../components/ui/Button.jsx";
 import PasswordInput from "../../components/ui/PasswordInput.jsx";
+import PageHeader, { HeaderStat } from "../../components/ui/PageHeader.jsx";
 
 function FieldError({ message }) {
   if (!message) return null;
@@ -64,11 +65,10 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md px-4 py-12">
-      <h1 className="font-display text-h2 text-slate-800">Đổi mật khẩu</h1>
-      <p className="mt-2 text-caption text-slate-500">Nhập mật khẩu hiện tại và mật khẩu mới để cập nhật.</p>
+    <div className="page">
+      <PageHeader icon={Lock} tone="blue" title="Đổi mật khẩu" subtitle="Nhập mật khẩu hiện tại và mật khẩu mới để cập nhật" />
 
-      <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-4 rounded-3xl bg-white p-6 shadow-elevation-1 ring-1 ring-slate-100 sm:p-8">
+      <form onSubmit={handleSubmit} noValidate className="mx-auto mt-5 max-w-xl space-y-4 rounded-3xl bg-white p-6 shadow-elevation-1 sm:p-8">
         <div>
           <label className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
             <Lock className="h-4 w-4" /> Mật khẩu hiện tại <span className="text-red-500">*</span>

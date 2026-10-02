@@ -27,15 +27,22 @@ async function list(req, res, next) {
       .populate("chapter", "title")
       .sort({ createdAt: -1 });
 
-    let lastAttemptByTest = new Map();
+    const lastAttemptByTest = new Map();
+    const statsByTest = new Map();
     if (req.user) {
       const attempts = await TestAttempt.find({
         student: req.user._id,
         test: { $in: tests.map((t) => t._id) },
-      }).sort({ createdAt: -1 });
+      })
+        .select("test score totalQuestions createdAt")
+        .sort({ createdAt: -1 });
       for (const attempt of attempts) {
         const key = String(attempt.test);
         if (!lastAttemptByTest.has(key)) lastAttemptByTest.set(key, attempt);
+        const st = statsByTest.get(key) || { attemptCount: 0, bestScore: 0 };
+        st.attemptCount += 1;
+        st.bestScore = Math.max(st.bestScore, attempt.score);
+        statsByTest.set(key, st);
       }
     }
 
@@ -47,8 +54,11 @@ async function list(req, res, next) {
         delete obj.questions;
         const last = lastAttemptByTest.get(String(t._id));
         obj.lastAttempt = last
-          ? { score: last.score, totalQuestions: last.totalQuestions, createdAt: last.createdAt }
+          ? { _id: last._id, score: last.score, totalQuestions: last.totalQuestions, createdAt: last.createdAt }
           : null;
+        const st = statsByTest.get(String(t._id));
+        obj.attemptCount = st?.attemptCount || 0;
+        obj.bestScore = st?.bestScore ?? null;
         return obj;
       }),
     });
@@ -59,7 +69,11 @@ async function list(req, res, next) {
 
 async function getOne(req, res, next) {
   try {
-    const test = await Test.findById(req.params.id).populate("questions");
+    const test = await Test.findById(req.params.id)
+      .populate("questions")
+      .populate("subject", "name slug")
+      .populate("grade", "name slug")
+      .populate("chapter", "title");
     if (!test) return res.status(404).json({ success: false, message: "Không tìm thấy bài kiểm tra" });
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Vui lòng đăng nhập để làm bài kiểm tra" });
@@ -74,6 +88,7 @@ async function getOne(req, res, next) {
         subject: test.subject,
         grade: test.grade,
         chapter: test.chapter,
+        semester: test.semester,
         level: test.level,
         timeLimitSeconds: test.timeLimitSeconds,
         questions: isAdmin ? test.questions : test.questions.map(stripQuestion),

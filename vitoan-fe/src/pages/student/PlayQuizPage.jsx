@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ChevronLeft,
@@ -17,17 +17,33 @@ import {
   CheckCircle2,
   XCircle,
   Lightbulb,
-} from "lucide-react";
+  Check,
+  X,
+  Gem,
+  RotateCcw,
+} from "../../components/ui/icons.jsx";
 import { lessonService, questionService, attemptService, practiceSetService } from "../../api/services";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import Button from "../../components/ui/Button.jsx";
 import QuizResultView from "../../components/quiz/QuizResultView.jsx";
 import FillBlankPrompt from "../../components/quiz/FillBlankPrompt.jsx";
+import QuestionImage from "../../components/quiz/QuestionImage.jsx";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
+import AnswerFeedbackPopup from "../../components/quiz/AnswerFeedbackPopup.jsx";
 import { speak, speakQuestionText, stopSpeaking, FILL_TYPES } from "../../lib/speech.js";
 import { playCorrectSound, playWrongSound } from "../../lib/sound.js";
 import { cn, shuffleArray } from "../../lib/utils";
+import { useDialog } from "../../context/DialogContext.jsx";
+
+const POINTS_PER_CORRECT = 10;
+const PERFECT_BONUS = 20;
+
+function toPayloadAnswer(question, value) {
+  return FILL_TYPES.includes(question.type)
+    ? { question: question._id, textAnswer: (value || "").trim() }
+    : { question: question._id, selectedIndex: value ?? -1 };
+}
 
 function formatDuration(seconds) {
   const m = Math.floor(seconds / 60);
@@ -36,12 +52,20 @@ function formatDuration(seconds) {
 }
 
 export default function PlayQuizPage() {
+  const dialog = useDialog();
   const { lessonId, practiceSetId } = useParams();
   const isPracticeSet = !!practiceSetId;
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const isStudent = user?.role === "Student";
   const [meta, setMeta] = useState(null);
+  // Kỷ lục trước đó ở bài này: chỉ phần đúng VƯỢT kỷ lục mới được cộng điểm (khớp với server).
+  const [record, setRecord] = useState(null);
+  // Popup kết quả hiện ngay sau khi bấm "Kiểm tra".
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [allQuestions, setAllQuestions] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [resumed, setResumed] = useState(false);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState({});
   const [checked, setChecked] = useState({});
@@ -53,50 +77,151 @@ export default function PlayQuizPage() {
   const [loadError, setLoadError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [guestResult, setGuestResult] = useState(null);
-  const [startedAt] = useState(() => Date.now());
   const [elapsed, setElapsed] = useState(0);
   const [zoom, setZoom] = useState(100);
+  const elapsedRef = useRef(0);
 
   useEffect(() => {
-    const timer = setInterval(() => setElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
+    const timer = setInterval(() => {
+      elapsedRef.current += 1;
+      setElapsed(elapsedRef.current);
+    }, 1000);
     return () => clearInterval(timer);
-  }, [startedAt]);
+  }, []);
 
   useEffect(() => {
-    setLoading(true);
-    setLoadError("");
-    if (isPracticeSet) {
-      practiceSetService
-        .getOne(practiceSetId)
-        .then((res) => {
-          setMeta({ title: res.data.title, lessonId: res.data.lesson });
-          setQuestions(shuffleArray(res.data.questions));
-          setLoading(false);
-        })
-        .catch((err) => {
-          setLoadError(err.apiMessage || "Không thể tải bài luyện tập");
-          setLoading(false);
-        });
-    } else {
-      Promise.all([lessonService.getOne(lessonId), questionService.listByLesson(lessonId)])
-        .then(([lessonRes, questionsRes]) => {
-          setMeta({ title: lessonRes.data.title, lessonId });
-          setQuestions(shuffleArray(questionsRes.data));
-          setLoading(false);
-        })
-        .catch((err) => {
-          setLoadError(err.apiMessage || "Không thể tải bài học");
-          setLoading(false);
-        });
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setLoadError("");
+      try {
+        let info;
+        let qs;
+        if (isPracticeSet) {
+          const res = await practiceSetService.getOne(practiceSetId);
+          const li = res.data.lessonInfo;
+          info = { title: res.data.title, lessonId: res.data.lesson, subject: li?.subject, grade: li?.grade };
+          qs = res.data.questions;
+        } else {
+          const [lessonRes, questionsRes] = await Promise.all([
+            lessonService.getOne(lessonId),
+            questionService.listByLesson(lessonId),
+          ]);
+          info = { title: lessonRes.data.title, lessonId, subject: lessonRes.data.subject, grade: lessonRes.data.grade };
+          qs = questionsRes.data;
+        }
+        if (cancelled) return;
+        setMeta(info);
+        setAllQuestions(qs);
+        if (user?.role === "Student") {
+          attemptService
+            .record({ lesson: info.lessonId, practiceSet: practiceSetId || undefined })
+            .then((r) => !cancelled && setRecord(r.data))
+            .catch(() => {});
+        }
+
+        // Có lộ trình đang làm dở → làm tiếp đúng thứ tự câu, đúng câu đang làm, giữ kết quả đã chấm.
+        let progress = null;
+        if (user?.role === "Student") {
+          progress = (
+            await attemptService
+              .getProgress({ lesson: info.lessonId, practiceSet: practiceSetId || undefined })
+              .catch(() => ({ data: null }))
+          ).data;
+        }
+        const byId = new Map(qs.map((q) => [q._id, q]));
+        const ordered = progress?.questionOrder?.map((id) => byId.get(id)).filter(Boolean) || [];
+        if (progress && ordered.length === qs.length && progress.answers.length > 0) {
+          const restoredAnswers = {};
+          const restoredChecked = {};
+          for (const a of progress.answers) {
+            const q = byId.get(a.question);
+            if (!q) continue;
+            restoredAnswers[a.question] = FILL_TYPES.includes(q.type) ? a.textAnswer : a.selectedIndex;
+            restoredChecked[a.question] = { correct: a.correct };
+          }
+          setQuestions(ordered);
+          setAnswers(restoredAnswers);
+          setChecked(restoredChecked);
+          setCurrent(Math.min(progress.current || 0, ordered.length - 1));
+          elapsedRef.current = progress.elapsedSeconds || 0;
+          setResumed(true);
+        } else {
+          setQuestions(shuffleArray(qs));
+        }
+      } catch (err) {
+        if (!cancelled) setLoadError(err.apiMessage || "Không thể tải bài luyện tập");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
+    load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessonId, practiceSetId, isPracticeSet]);
+
+  // Câu khôi phục từ lộ trình chỉ có cờ đúng/sai — lấy lại đáp án đúng + giải thích khi xem lại câu đó.
+  useEffect(() => {
+    const q = questions[current];
+    const r = q && checked[q._id];
+    if (!q || !r || r.explanation !== undefined) return;
+    const payload = toPayloadAnswer(q, answers[q._id]);
+    questionService
+      .checkAnswer(q._id, payload)
+      .then((res) => setChecked((c) => ({ ...c, [q._id]: res.data })))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, questions]);
+
+  const persist = useCallback(
+    (nextAnswers, nextChecked, nextCurrent) => {
+      if (!isStudent || !meta || questions.length === 0) return;
+      attemptService
+        .saveProgress({
+          lesson: meta.lessonId,
+          practiceSet: practiceSetId || undefined,
+          questionOrder: questions.map((q) => q._id),
+          answers: questions.filter((q) => nextChecked[q._id]).map((q) => toPayloadAnswer(q, nextAnswers[q._id])),
+          current: nextCurrent,
+          elapsedSeconds: elapsedRef.current,
+        })
+        .catch(() => {});
+    },
+    [isStudent, meta, practiceSetId, questions]
+  );
+
+  async function goTo(index) {
+    setShowFeedback(false);
+    setCurrent(index);
+    persist(answers, checked, index);
+  }
+
+  async function restart() {
+    if (!(await dialog.confirm({ message: "Làm lại từ đầu? Tiến trình đang làm dở sẽ bị xoá.", danger: true, confirmText: "Làm lại" }))) return;
+    if (isStudent) {
+      await attemptService.clearProgress({ lesson: meta.lessonId, practiceSet: practiceSetId || undefined }).catch(() => {});
+    }
+    setQuestions(shuffleArray(allQuestions));
+    setAnswers({});
+    setChecked({});
+    setHints({});
+    setCurrent(0);
+    elapsedRef.current = 0;
+    setElapsed(0);
+    setResumed(false);
+  }
 
   useEffect(() => () => stopSpeaking(), []);
   useEffect(() => setZoom(100), [current]);
   useEffect(() => setHintError(""), [current]);
   useEffect(() => {
     const q = questions[current];
-    if (q?.type === "listen_choice" || q?.type === "listen_fill") speakQuestionText(q.audioText || q.text);
+    if (q && !checked[q._id] && (q.type === "listen_choice" || q.type === "listen_fill")) {
+      speakQuestionText(q.audioText || q.text);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, questions]);
 
   if (loading) {
@@ -109,7 +234,7 @@ export default function PlayQuizPage() {
 
   if (loadError) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-center px-4 py-16 text-center">
+      <div className="mx-auto flex max-w-md flex-col items-center px-4 py-10 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
           <Lock className="h-7 w-7" />
         </span>
@@ -129,15 +254,15 @@ export default function PlayQuizPage() {
 
   if (guestResult) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-12">
-        <QuizResultView attempt={guestResult} guest />
+      <div className="page">
+        <QuizResultView attempt={guestResult} guest backTo={meta?.lessonId ? `/bai/${meta.lessonId}` : "/"} backLabel="Về bài học" />
       </div>
     );
   }
 
   if (questions.length === 0) {
     return (
-      <p className="mx-auto max-w-xl px-4 py-16 text-center text-body text-slate-500">
+      <p className="mx-auto max-w-xl px-4 py-10 text-center text-body text-slate-500">
         Bài này chưa có câu hỏi.
       </p>
     );
@@ -158,8 +283,14 @@ export default function PlayQuizPage() {
   const answeredCount = questions.filter(isAnswered).length;
   const currentAnswered = isAnswered(question);
   const correctCount = Object.values(checked).filter((r) => r.correct).length;
-  const wrongCount = Object.values(checked).filter((r) => !r.correct).length;
-  const liveScore = Math.max(0, correctCount - wrongCount);
+  const checkedCount = Object.keys(checked).length;
+  const runningPoints = record
+    ? Math.max(0, correctCount - record.best) * POINTS_PER_CORRECT +
+      (questions.length > 0 && correctCount === questions.length && !record.hadPerfect ? PERFECT_BONUS : 0)
+    : correctCount * POINTS_PER_CORRECT;
+  const allChecked = checkedCount === questions.length;
+  const nextUnchecked = questions.findIndex((q, idx) => idx > current && !checked[q._id]);
+  const firstUnchecked = questions.findIndex((q) => !checked[q._id]);
 
   function selectChoice(index) {
     if (isLocked) return;
@@ -190,7 +321,10 @@ export default function PlayQuizPage() {
     try {
       const payload = isFillQuestion ? { textAnswer: (selected || "").trim() } : { selectedIndex: selected };
       const res = await questionService.checkAnswer(question._id, payload);
-      setChecked((c) => ({ ...c, [question._id]: res.data }));
+      const nextChecked = { ...checked, [question._id]: res.data };
+      setChecked(nextChecked);
+      setShowFeedback(true);
+      persist(answers, nextChecked, current);
       (res.data.correct ? playCorrectSound : playWrongSound)();
     } finally {
       setChecking(false);
@@ -203,16 +337,16 @@ export default function PlayQuizPage() {
       const payload = {
         lesson: meta.lessonId,
         ...(isPracticeSet ? { practiceSet: practiceSetId } : {}),
-        durationSeconds: elapsed,
-        answers: questions.map((q) =>
-          FILL_TYPES.includes(q.type)
-            ? { question: q._id, textAnswer: (answers[q._id] || "").trim() }
-            : { question: q._id, selectedIndex: answers[q._id] ?? -1 }
-        ),
+        durationSeconds: elapsedRef.current,
+        answers: questions.map((q) => toPayloadAnswer(q, answers[q._id])),
       };
-      if (user) {
+      if (isStudent) {
         const res = await attemptService.submit(payload);
-        navigate(`/ket-qua/${res.data._id}`, { state: { newBadges: res.newBadges } });
+        if (res.pointsEarned > 0) refreshUser?.().catch?.(() => {});
+        navigate(`/ket-qua/${res.data._id}`, {
+          replace: true,
+          state: { newBadges: res.newBadges, pointsEarned: res.pointsEarned, previousBest: res.previousBest },
+        });
       } else {
         const res = await attemptService.submitGuest(payload);
         setGuestResult(res.data);
@@ -223,49 +357,101 @@ export default function PlayQuizPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-secondary/15 via-slate-50 to-slate-50">
-      {/* Top bar */}
-      <div className="bg-gradient-to-r from-secondary to-blue-600 px-4 py-3 shadow-elevation-2">
-        <div className="mx-auto flex max-w-2xl items-center gap-3">
+    <div className="min-h-screen">
+      {/* Top bar: lùi 1 cấp về bài học, tên môn · lớp, điểm tích luỹ, thời gian */}
+      <div className="sticky top-0 z-30 bg-gradient-to-r from-sky-400 via-blue-500 to-violet-500 px-4 py-2.5 shadow-[0_8px_24px_-12px_rgba(59,130,246,0.7)]">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 sm:px-2 xl:max-w-none xl:px-6 2xl:px-12">
           <Link
             to={meta?.lessonId ? `/bai/${meta.lessonId}` : "/"}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+            title="Quay lại bài học"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold text-white">{meta?.title}</p>
-            <div className="mt-1.5 flex gap-1">
-              {questions.map((q, idx) => (
-                <span
-                  key={q._id}
-                  className={cn(
-                    "h-1.5 flex-1 rounded-full transition-colors",
-                    idx === current
-                      ? "bg-white"
-                      : checked[q._id]
-                      ? checked[q._id].correct
-                        ? "bg-emerald-300"
-                        : "bg-rose-300"
-                      : isAnswered(q)
-                      ? "bg-white/70"
-                      : "bg-white/25"
-                  )}
-                />
-              ))}
-            </div>
+          <div className="min-w-0 flex-1 text-white">
+            <p className="truncate text-xs font-bold uppercase tracking-wide text-white/80">
+              {[meta?.subject?.name, meta?.grade?.name].filter(Boolean).join(" · ") || "Luyện tập"}
+            </p>
+            <p className="truncate font-display text-base font-bold">{meta?.title}</p>
           </div>
-          <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-400/90 px-2.5 py-1 text-xs font-bold text-white">
-            <Star className="h-3.5 w-3.5 fill-white" /> {liveScore}/{questions.length}
+          <span
+            title="Điểm tích luỹ lượt này"
+            className="flex shrink-0 items-center gap-1 rounded-full bg-amber-400/90 px-2.5 py-1 text-sm font-extrabold text-white"
+          >
+            <Gem className="h-4 w-4" /> {runningPoints}
           </span>
-          <span className="flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold text-white">
+          <span className="hidden shrink-0 items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold text-white sm:flex">
             <Clock className="h-3.5 w-3.5" /> {formatDuration(elapsed)}
           </span>
         </div>
       </div>
 
-      <div className="mx-auto max-w-2xl px-4 py-6">
-        <div className="relative rounded-3xl bg-white p-6 shadow-elevation-2 ring-1 ring-slate-100 sm:p-8">
+      <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 xl:max-w-none xl:px-10 2xl:px-16">
+        {/* Lộ trình làm bài: bấm để xem lại / nhảy tới câu */}
+        <div className="mb-4 flex items-center gap-2 rounded-2xl bg-white p-2.5 shadow-elevation-1">
+          <div className="flex flex-1 flex-wrap gap-1.5">
+            {questions.map((q, idx) => {
+              const r = checked[q._id];
+              return (
+                <button
+                  key={q._id}
+                  type="button"
+                  onClick={() => goTo(idx)}
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition",
+                    r
+                      ? r.correct
+                        ? "bg-emerald-500 text-white"
+                        : "bg-rose-400 text-white"
+                      : isAnswered(q)
+                      ? "bg-secondary/20 text-secondary"
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200",
+                    idx === current && "ring-2 ring-secondary ring-offset-2"
+                  )}
+                >
+                  {r ? r.correct ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" /> : idx + 1}
+                </button>
+              );
+            })}
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-xs font-bold uppercase text-slate-400">Đúng</p>
+            <p className="font-display text-lg font-extrabold text-emerald-600">
+              <Star className="mb-0.5 inline h-4 w-4 fill-amber-400 text-amber-400" /> {correctCount}/{checkedCount}
+            </p>
+          </div>
+        </div>
+
+        {isStudent && record && (
+          <div className="mb-4 flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-2.5 text-body text-amber-900 ring-1 ring-amber-200">
+            <Gem className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+            <p>
+              {record.attempts > 0 ? (
+                <>
+                  Kỷ lục của em ở bài này: <b>{record.best} câu đúng</b>. Mỗi câu đúng <b>vượt kỷ lục</b> được +{POINTS_PER_CORRECT} 💎
+                  {!record.hadPerfect && <>, đúng hết thêm +{PERFECT_BONUS} 💎</>}. Điểm được cộng khi em bấm “Hoàn thành”.
+                </>
+              ) : (
+                <>
+                  Lần đầu làm bài này: mỗi câu đúng +{POINTS_PER_CORRECT} 💎, đúng hết thêm +{PERFECT_BONUS} 💎. Điểm được cộng khi em bấm “Hoàn thành”.
+                </>
+              )}
+            </p>
+          </div>
+        )}
+
+        {resumed && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200">
+            <span className="flex-1">
+              Em đang làm tiếp lộ trình dở: đã xong {checkedCount}/{questions.length} câu, tích luỹ {runningPoints} điểm.
+            </span>
+            <button type="button" onClick={restart} className="flex items-center gap-1 font-bold hover:underline">
+              <RotateCcw className="h-4 w-4" /> Làm lại từ đầu
+            </button>
+          </div>
+        )}
+
+        <div className="relative rounded-3xl bg-white p-6 shadow-elevation-2 sm:p-8">
           <button
             type="button"
             onClick={handleGetHint}
@@ -279,7 +465,7 @@ export default function PlayQuizPage() {
 
           <div className="flex items-center justify-between pr-12">
             <span className="flex items-center gap-2">
-              <span className="font-display font-bold text-slate-800">Câu hỏi số {current + 1}</span>
+              <span className="font-display text-lg font-bold text-slate-800">Câu hỏi số {current + 1}</span>
               <button
                 type="button"
                 onClick={() => speak(question.audioText || question.text)}
@@ -304,12 +490,7 @@ export default function PlayQuizPage() {
           {question.imageUrl && (
             <div className="mt-4">
               <div className="flex justify-center overflow-auto rounded-xl bg-slate-50 p-4">
-                <img
-                  src={question.imageUrl}
-                  alt=""
-                  style={{ width: `${zoom}%` }}
-                  className="h-auto max-w-none transition-[width]"
-                />
+                <QuestionImage src={question.imageUrl} zoom={zoom} />
               </div>
               <div className="mt-2 flex items-center justify-center gap-2">
                 <button
@@ -331,7 +512,7 @@ export default function PlayQuizPage() {
             </div>
           )}
 
-          {!isFillQuestion && <p className="mt-4 text-body-lg font-semibold text-slate-800">{question.text}</p>}
+          {!isFillQuestion && <p className="mt-4 whitespace-pre-line text-2xl font-semibold leading-relaxed text-slate-800">{question.text}</p>}
 
           {(question.type === "listen_choice" || question.type === "listen_fill") && (
             <button
@@ -358,7 +539,7 @@ export default function PlayQuizPage() {
                     disabled={isLocked}
                     onClick={() => selectChoice(idx)}
                     className={cn(
-                      "flex flex-col items-center gap-2 rounded-2xl border-2 px-4 py-6 font-bold transition",
+                      "flex flex-col items-center gap-2 rounded-2xl px-4 py-6 font-bold ring-2 transition",
                       isCorrectChoice && "border-primary bg-primary/10 text-primary",
                       isWrongPick && "border-red-400 bg-red-50 text-red-600",
                       !isLocked &&
@@ -366,7 +547,7 @@ export default function PlayQuizPage() {
                           ? isTrueOption
                             ? "border-green-500 bg-green-50 text-green-700"
                             : "border-red-500 bg-red-50 text-red-700"
-                          : "border-slate-200 hover:border-primary/50 hover:bg-slate-50")
+                          : "bg-white text-slate-700 ring-slate-200 shadow-[0_4px_0_0_#e2e8f0] hover:-translate-y-0.5 hover:ring-sky-300")
                     )}
                   >
                     {isTrueOption ? <ThumbsUp className="h-8 w-8" /> : <ThumbsDown className="h-8 w-8" />}
@@ -387,16 +568,16 @@ export default function PlayQuizPage() {
                       disabled={isLocked}
                       onClick={() => selectChoice(idx)}
                       className={cn(
-                        "flex min-h-[4.5rem] w-full flex-col items-center justify-center gap-1 rounded-2xl border-2 px-3 py-3 text-center font-semibold transition",
+                        "flex min-h-[5.5rem] w-full flex-col items-center justify-center gap-1 rounded-2xl px-3 py-3 text-center text-xl font-bold ring-2 transition",
                         isCorrectChoice && "border-primary bg-primary/10 text-primary",
                         isWrongPick && "border-red-400 bg-red-50 text-red-600",
                         !isLocked &&
                           (selected === idx
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-slate-200 hover:border-primary/50 hover:bg-slate-50")
+                            ? "-translate-y-0.5 bg-sky-50 text-sky-700 ring-sky-400 shadow-[0_4px_0_0_#7dd3fc]"
+                            : "bg-white text-slate-700 ring-slate-200 shadow-[0_4px_0_0_#e2e8f0] hover:-translate-y-0.5 hover:ring-sky-300")
                       )}
                     >
-                      <span className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-400">
+                      <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-500">
                         {letters[idx]}
                       </span>
                       {(isCorrectChoice || isWrongPick) && (
@@ -427,55 +608,61 @@ export default function PlayQuizPage() {
           )}
         </div>
 
+        {/* Kết quả câu vừa kiểm tra hiện dạng popup; đóng popup thì còn 1 dòng tóm tắt để mở lại. */}
         {isLocked && (
-          <div className="mt-4 flex items-start gap-3">
-            <OwlMascot className="h-16 w-16 shrink-0" animated={false} covering={!currentResult.correct} />
-            <div className="flex-1 rounded-2xl bg-white p-4 shadow-elevation-1 ring-1 ring-slate-100">
-              <p className={cn("font-display font-bold", currentResult.correct ? "text-primary" : "text-red-600")}>
-                {currentResult.correct ? "Chính xác! Em giỏi quá! 🎉" : "Tiếc quá, câu trả lời của em sai rồi..."}
-              </p>
-              <p className="mt-0.5 text-caption text-slate-500">
-                {currentResult.correct
-                  ? "Tiếp tục phát huy nhé!"
-                  : "Hãy cùng xem giải thích, sau đó làm câu tiếp theo nhé."}
-              </p>
-            </div>
+          <div
+            className={cn(
+              "mt-4 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 ring-1",
+              currentResult.correct ? "bg-emerald-50 ring-emerald-100" : "bg-rose-50 ring-rose-100"
+            )}
+          >
+            <OwlMascot className="h-10 w-10 shrink-0" animated={false} covering={!currentResult.correct} />
+            <p className={cn("flex-1 font-display font-bold", currentResult.correct ? "text-emerald-700" : "text-rose-600")}>
+              {currentResult.correct ? "Em đã trả lời đúng câu này! 🎉" : "Câu này em trả lời chưa đúng."}
+            </p>
+            {!currentResult.correct && (
+              <button
+                type="button"
+                onClick={() => setShowFeedback(true)}
+                className="flex items-center gap-1.5 rounded-full bg-white px-4 py-1.5 text-sm font-bold text-amber-700 ring-1 ring-amber-200 hover:bg-amber-50"
+              >
+                <Lightbulb className="h-4 w-4 fill-amber-300 text-amber-500" /> Xem giải thích
+              </button>
+            )}
           </div>
         )}
 
+        {isLocked && showFeedback && (
+          <AnswerFeedbackPopup
+            result={currentResult}
+            correctAnswer={isFillQuestion ? currentResult.correctText : question.choices[currentResult.correctIndex]}
+            primaryLabel={
+              allChecked
+                ? submitting
+                  ? "Đang nộp bài..."
+                  : `Hoàn thành & nhận ${runningPoints} 💎`
+                : nextUnchecked !== -1
+                ? "Câu tiếp theo"
+                : "Làm câu còn lại"
+            }
+            primaryIcon={allChecked ? "submit" : "next"}
+            busy={submitting}
+            onPrimary={() => (allChecked ? handleSubmit() : goTo(nextUnchecked !== -1 ? nextUnchecked : firstUnchecked))}
+            onClose={() => setShowFeedback(false)}
+          />
+        )}
+
         {isLocked && (
-          <div className="mt-4 overflow-hidden rounded-2xl bg-white shadow-elevation-1 ring-1 ring-slate-100">
-            <div className="flex items-center gap-1.5 bg-amber-50 px-5 py-3">
-              <Lightbulb className="h-4 w-4 fill-amber-300 text-amber-500" />
-              <span className="text-sm font-bold text-amber-700">Giải thích</span>
-            </div>
-            <div className="p-5">
-              {!currentResult.correct && (
-                <p className="text-body text-slate-700">
-                  Đáp án đúng là:{" "}
-                  <span className="font-bold text-primary">
-                    {isFillQuestion ? currentResult.correctText : question.choices[currentResult.correctIndex]}
-                  </span>
-                  .
-                </p>
-              )}
-              {currentResult.explanation && (
-                <p className={cn("text-body text-slate-600", !currentResult.correct && "mt-1")}>
-                  {currentResult.explanation}
-                </p>
-              )}
-              <div className="mt-4">
-                {current < questions.length - 1 ? (
-                  <Button onClick={() => setCurrent((c) => c + 1)} className="rounded-full px-8">
-                    Câu tiếp theo <ChevronRight className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button onClick={handleSubmit} disabled={submitting} className="rounded-full px-8">
-                    <Send className="h-4 w-4" /> {submitting ? "Đang nộp bài..." : "Nộp bài"}
-                  </Button>
-                )}
-              </div>
-            </div>
+          <div className="mt-4">
+            {allChecked ? (
+              <Button onClick={handleSubmit} disabled={submitting} className="rounded-full px-8">
+                <Send className="h-4 w-4" /> {submitting ? "Đang nộp bài..." : `Hoàn thành & nhận ${runningPoints} 💎`}
+              </Button>
+            ) : (
+              <Button onClick={() => goTo(nextUnchecked !== -1 ? nextUnchecked : firstUnchecked)} className="rounded-full px-8">
+                {nextUnchecked !== -1 ? "Câu tiếp theo" : "Làm câu còn lại"} <ChevronRight className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         )}
 
@@ -484,7 +671,7 @@ export default function PlayQuizPage() {
             <Button
               variant="outline"
               disabled={current === 0}
-              onClick={() => setCurrent((c) => c - 1)}
+              onClick={() => goTo(current - 1)}
               className="rounded-full px-5"
             >
               <ChevronLeft className="h-4 w-4" /> Câu trước
@@ -498,7 +685,7 @@ export default function PlayQuizPage() {
           <div className="mt-4">
             <Button
               variant="outline"
-              onClick={() => setCurrent((c) => c - 1)}
+              onClick={() => goTo(current - 1)}
               className="rounded-full px-5"
             >
               <ChevronLeft className="h-4 w-4" /> Câu trước

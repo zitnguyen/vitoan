@@ -30,7 +30,22 @@ export default function ResultPage() {
 
   return (
     <QuizResultLayout>
-      <QuizResultView attempt={attempt} newBadges={location.state?.newBadges} />
+      <QuizResultView
+        attempt={attempt}
+        heading={[attempt.lesson?.subject?.name, attempt.lesson?.grade?.name, attempt.practiceSet?.title || attempt.lesson?.title]
+          .filter(Boolean)
+          .join(" · ")}
+        backTo={`/bai/${attempt.lesson?._id || attempt.lesson}`}
+        backLabel="Về bài học"
+        retryTo={
+          attempt.practiceSet
+            ? `/luyen-tap/${attempt.practiceSet._id || attempt.practiceSet}`
+            : `/bai/${attempt.lesson?._id || attempt.lesson}/luyen-tap`
+        }
+        newBadges={location.state?.newBadges}
+        pointsEarned={location.state?.pointsEarned}
+        previousBest={location.state?.previousBest}
+      />
     </QuizResultLayout>
   );
 }

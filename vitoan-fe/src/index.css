@@ -8,17 +8,60 @@ html,
 }
 
 html {
-  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+/* Biến đổ bóng cho shadow-elevation-1/2 (xem tailwind.config.js) */
+:root {
+  /* Phong cách hiện đại (giống trang chủ): bóng mềm, không viền */
+  --elev-1: 0 1px 2px rgb(11 35 64 / 0.04), 0 10px 28px -14px rgb(11 35 64 / 0.22);
+  --elev-2: 0 2px 4px rgb(11 35 64 / 0.04), 0 18px 44px -20px rgb(11 35 64 / 0.3);
+}
+.admin-ui {
+  --elev-1: 0 0 0 1px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.08);
+  --elev-2: 0 0 0 1px rgb(15 23 42 / 0.06), 0 8px 16px -4px rgb(15 23 42 / 0.12);
 }
 
 body {
-  @apply bg-slate-50 text-slate-800 antialiased;
-  font-family: "Inter", system-ui, sans-serif;
-  overflow-x: hidden;
+  @apply text-slate-800 antialiased;
+  /* Nền chung mọi trang, cùng tông với trang chủ */
+  background: linear-gradient(180deg, #f0f9ff 0%, #fdf2f8 45%, #f5f3ff 100%) fixed;
+  font-family: "Nunito", system-ui, sans-serif;
+  overflow-x: clip;
+}
+
+/* Khung trang dùng chung cho mọi trang học sinh: cùng độ rộng với header/footer,
+   lề đều, không để khoảng trống thừa trên/dưới. */
+@layer components {
+  .page {
+    @apply mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 xl:max-w-none xl:px-10 2xl:px-16;
+  }
+  .page-title {
+    @apply font-display text-h2 text-slate-800;
+  }
+  /* Tiêu đề mục dạng nhãn tròn viền mực — giống "★ Lộ trình" ở trang chủ */
+  /* Tiêu đề mục: chữ đậm + icon 3D, không khung */
+  .section-title {
+    @apply inline-flex w-fit items-center gap-2.5 font-display text-2xl font-black;
+    color: #0b2340;
+  }
+  .section-title > img,
+  .section-title > svg {
+    @apply h-8 w-8;
+  }
+  /* Nút tab / bộ lọc tròn — giống AnimePill */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 font-black text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:text-slate-800 hover:ring-slate-300;
+  }
+  .pill-active {
+    @apply bg-gradient-to-r from-primary to-emerald-500 text-white shadow-[0_6px_16px_-8px_rgba(0,177,79,0.8)] ring-0 hover:text-white;
+  }
 }
 
 .font-display {
-  font-family: "Baloo 2", system-ui, sans-serif;
+  font-family: "Nunito", system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.01em;
 }
 
 @keyframes toast-in {
@@ -300,3 +343,114 @@ body {
 .animate-badge-pulse {
   animation: badge-pulse 2.2s ease-in-out infinite;
 }
+
+/* Popup kết quả câu hỏi */
+@keyframes feedback-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes feedback-pop-in {
+  0% { opacity: 0; transform: translateY(24px) scale(0.96); }
+  70% { opacity: 1; transform: translateY(-4px) scale(1.01); }
+  100% { transform: translateY(0) scale(1); }
+}
+.feedback-fade { animation: feedback-fade-in 0.18s ease-out; }
+.feedback-pop { animation: feedback-pop-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@media (prefers-reduced-motion: reduce) {
+  .feedback-fade, .feedback-pop { animation: none; }
+}
+
+
+/* ===== Trang giới thiệu: hiệu ứng ===== */
+.reveal { opacity: 0; transform: translateY(28px) scale(0.98); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
+.reveal-in { opacity: 1; transform: none; }
+@keyframes word-flip {
+  0% { opacity: 0; transform: translateY(60%) rotateX(-80deg); }
+  60% { opacity: 1; transform: translateY(-6%) rotateX(8deg); }
+  100% { opacity: 1; transform: none; }
+}
+.word-flip { animation: word-flip 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; transform-origin: 50% 100%; }
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0) rotate(-6deg); }
+  33% { transform: translate(6px, -14px) rotate(4deg); }
+  66% { transform: translate(-6px, -6px) rotate(-2deg); }
+}
+.drift { animation: drift 7s ease-in-out infinite; }
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.6) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.15) rotate(20deg); }
+}
+.twinkle { animation: twinkle 2.6s ease-in-out infinite; }
+@keyframes confetti-fly {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate(var(--x), calc(var(--y) * -1 + 260px)) rotate(var(--r)); opacity: 0; }
+}
+@keyframes confetti-up {
+  0% { transform: translate(0, 0) rotate(0) scale(0.4); opacity: 1; }
+  45% { transform: translate(calc(var(--x) * 0.8), var(--y)) rotate(calc(var(--r) * 0.5)) scale(1); opacity: 1; }
+  100% { transform: translate(var(--x), calc(var(--y) + 320px)) rotate(var(--r)); opacity: 0; }
+}
+.confetti-piece { animation: confetti-up 2.2s cubic-bezier(0.2, 0.7, 0.4, 1) both; }
+@keyframes shine {
+  0% { transform: translateX(-120%) skewX(-20deg); }
+  60%, 100% { transform: translateX(260%) skewX(-20deg); }
+}
+.btn-shine { position: relative; overflow: hidden; }
+.btn-shine::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent); animation: shine 3.2s ease-in-out infinite; }
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(211, 60, 45, 0.55); }
+  50% { box-shadow: 0 0 0 10px rgba(211, 60, 45, 0); }
+}
+.glow-pulse { animation: glow-pulse 2.2s ease-in-out infinite; }
+@keyframes blob-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, -20px) scale(1.12); }
+}
+.blob-drift { animation: blob-drift 12s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .word-flip, .drift, .twinkle, .confetti-piece, .btn-shine::after, .glow-pulse, .blob-drift { animation: none; }
+}
+
+
+/* ================= Phong cách anime (trang Nhiệm vụ / điểm danh) ================= */
+.anime-sky {
+  background:
+    radial-gradient(120% 90% at 85% 0%, rgba(255, 255, 255, 0.55) 0%, transparent 45%),
+    linear-gradient(135deg, #ff9ed1 0%, #c59bff 45%, #7cc7ff 100%);
+}
+.anime-rays { position: absolute; inset: -60%; pointer-events: none; opacity: 0.35;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.9) 0deg 4deg, transparent 4deg 16deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 12%, #000 55%); mask-image: radial-gradient(circle, transparent 12%, #000 55%);
+  animation: anime-spin 60s linear infinite; }
+@keyframes anime-spin { to { transform: rotate(360deg); } }
+.anime-dots { background-image: radial-gradient(rgba(255, 255, 255, 0.45) 1.5px, transparent 1.6px); background-size: 14px 14px; }
+.anime-title { color: #fff; -webkit-text-stroke: 7px #2b1a4a; paint-order: stroke fill; text-shadow: 0 5px 0 #2b1a4a; letter-spacing: 0.02em; }
+.anime-title-sm { color: #fff; -webkit-text-stroke: 5px #2b1a4a; paint-order: stroke fill; text-shadow: 0 3px 0 #2b1a4a; }
+.anime-bubble { position: relative; background: #fff; border: 3px solid #2b1a4a; border-radius: 22px; box-shadow: 0 4px 0 0 #2b1a4a; }
+.anime-bubble::after { content: ""; position: absolute; left: -14px; bottom: 16px; width: 18px; height: 18px; background: #fff;
+  border-left: 3px solid #2b1a4a; border-bottom: 3px solid #2b1a4a; transform: skewY(35deg) rotate(20deg); border-bottom-left-radius: 4px; }
+@keyframes anime-twinkle { 0%, 100% { transform: scale(0.6) rotate(0deg); opacity: 0.4; } 50% { transform: scale(1.15) rotate(20deg); opacity: 1; } }
+.anime-twinkle { animation: anime-twinkle 2.4s ease-in-out infinite; display: inline-block; }
+@keyframes anime-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-10px) rotate(2deg); } }
+.anime-float { animation: anime-float 3.2s ease-in-out infinite; }
+@keyframes anime-glow { 0%, 100% { box-shadow: 0 0 0 3px #ffd43b, 0 0 18px 4px rgba(255, 212, 59, 0.7), 0 6px 0 0 #2b1a4a; }
+  50% { box-shadow: 0 0 0 3px #ffd43b, 0 0 30px 10px rgba(255, 212, 59, 0.95), 0 6px 0 0 #2b1a4a; } }
+.anime-glow { animation: anime-glow 1.6s ease-in-out infinite; }
+@keyframes anime-stamp { 0% { transform: scale(2.4) rotate(-30deg); opacity: 0; } 60% { transform: scale(0.9) rotate(-14deg); opacity: 1; } 100% { transform: scale(1) rotate(-14deg); opacity: 1; } }
+.anime-stamp { animation: anime-stamp 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both; border: 3px solid #e03131; color: #e03131; background: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 0 0 2px rgba(224, 49, 49, 0.25); }
+@keyframes anime-stripes { to { background-position: 28px 0; } }
+.anime-stripes { background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.35) 0 7px, transparent 7px 14px); background-size: 28px 100%; animation: anime-stripes 0.9s linear infinite; }
+@keyframes anime-pop { 0% { transform: scale(0.3); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+.anime-pop { animation: anime-pop 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.anime-card { box-shadow: 0 2px 4px rgb(11 35 64 / 0.04), 0 18px 44px -20px rgb(11 35 64 / 0.3); }
+@media (prefers-reduced-motion: reduce) {
+  .anime-rays, .anime-twinkle, .anime-float, .anime-glow, .anime-stripes { animation: none; }
+}
+
+
+/* Lơ lửng nhẹ cho hình 3D (trang chủ khách) */
+@keyframes float-soft { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { [class*="float-soft"] { animation: none !important; } }

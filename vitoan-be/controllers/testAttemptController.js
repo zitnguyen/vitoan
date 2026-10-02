@@ -3,6 +3,7 @@ const Test = require("../models/Test");
 const TestAttempt = require("../models/TestAttempt");
 const { gradeAnswer } = require("../utils/grading");
 const { chatCompletion } = require("../utils/openai");
+const { buildTestFeedback } = require("../utils/analysis");
 
 async function submit(req, res, next) {
   try {
@@ -42,13 +43,37 @@ async function submit(req, res, next) {
 async function getOne(req, res, next) {
   try {
     const attempt = await TestAttempt.findById(req.params.id)
-      .populate({ path: "answers.question", select: "type text choices correctIndex correctText explanation" })
-      .populate("test", "title testType level");
+      .populate({ path: "answers.question", select: "type text imageUrl choices correctIndex correctText explanation" })
+      .populate({
+        path: "test",
+        select: "title testType level subject grade chapter",
+        populate: [
+          { path: "subject", select: "name slug" },
+          { path: "grade", select: "name slug" },
+          { path: "chapter", select: "title" },
+        ],
+      });
     if (!attempt) return res.status(404).json({ success: false, message: "Không tìm thấy lượt làm bài" });
     if (String(attempt.student) !== String(req.user._id) && req.user.role !== "Admin") {
       return res.status(403).json({ success: false, message: "Không có quyền xem" });
     }
-    res.json({ success: true, data: attempt });
+
+    // Nhận xét + so sánh với các lượt làm trước của cùng bài kiểm tra (làm nhiều lần).
+    const allAttempts = await TestAttempt.find({ student: attempt.student, test: attempt.test?._id })
+      .select("score totalQuestions durationSeconds createdAt answers")
+      .sort({ createdAt: -1 })
+      .lean();
+    const previous = allAttempts.filter((a) => a.createdAt < attempt.createdAt);
+    const data = attempt.toObject();
+    data.feedback = await buildTestFeedback(attempt, previous);
+    data.history = allAttempts.map((a) => ({
+      _id: a._id,
+      score: a.score,
+      totalQuestions: a.totalQuestions,
+      durationSeconds: a.durationSeconds,
+      createdAt: a.createdAt,
+    }));
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
@@ -83,8 +108,11 @@ Hãy viết một nhận xét ngắn gọn (3-4 câu), động viên học sinh,
 
 async function myHistory(req, res, next) {
   try {
-    const attempts = await TestAttempt.find({ student: req.user._id })
-      .populate("test", "title testType level")
+    const filter = { student: req.user._id };
+    if (req.query.test) filter.test = req.query.test;
+    const attempts = await TestAttempt.find(filter)
+      .select("-answers")
+      .populate({ path: "test", select: "title testType level subject", populate: { path: "subject", select: "name slug" } })
       .sort({ createdAt: -1 })
       .limit(50);
     res.json({ success: true, data: attempts });

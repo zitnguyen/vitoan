@@ -1,5 +1,7 @@
 const Lesson = require("../models/Lesson");
 const Question = require("../models/Question");
+const PracticeSet = require("../models/PracticeSet");
+const ReviewContent = require("../models/ReviewContent");
 
 async function list(req, res, next) {
   try {
@@ -12,7 +14,31 @@ async function list(req, res, next) {
       .populate("subject", "name slug")
       .populate("grade", "name slug order")
       .sort({ order: 1, createdAt: 1 });
-    res.json({ success: true, data: lessons });
+    if (req.query.withCounts !== "1") return res.json({ success: true, data: lessons });
+
+    // Admin: kèm số câu hỏi / bài luyện tập / có lý thuyết, video hay chưa để nhìn nhanh độ đầy đủ nội dung.
+    const ids = lessons.map((l) => l._id);
+    const [qCounts, psCounts, reviews] = await Promise.all([
+      Question.aggregate([{ $match: { lesson: { $in: ids } } }, { $group: { _id: "$lesson", n: { $sum: 1 } } }]),
+      PracticeSet.aggregate([{ $match: { lesson: { $in: ids } } }, { $group: { _id: "$lesson", n: { $sum: 1 } } }]),
+      ReviewContent.find({ lesson: { $in: ids } }).select("lesson videoUrl content").lean(),
+    ]);
+    const qMap = new Map(qCounts.map((c) => [String(c._id), c.n]));
+    const psMap = new Map(psCounts.map((c) => [String(c._id), c.n]));
+    const rMap = new Map(reviews.map((r) => [String(r.lesson), r]));
+    res.json({
+      success: true,
+      data: lessons.map((l) => {
+        const r = rMap.get(String(l._id));
+        return {
+          ...l.toObject(),
+          questionCount: qMap.get(String(l._id)) || 0,
+          practiceSetCount: psMap.get(String(l._id)) || 0,
+          hasVideo: !!r?.videoUrl,
+          hasContent: !!r?.content,
+        };
+      }),
+    });
   } catch (err) {
     next(err);
   }

@@ -68,7 +68,7 @@ export default function AdminPracticeSetListPage() {
   }, [search, filterSubject, filterGrade, filterChapter, filterLevel, filterStatus]);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-6xl xl:max-w-none xl:px-10 2xl:px-16 px-6 py-6">
       <h1 className="font-display text-h2 text-slate-800">Quản lý bài luyện tập</h1>
       <p className="mt-1 text-caption text-slate-500">
         Tìm kiếm bài luyện tập trên toàn hệ thống. Bấm vào một bài để tới trang quản lý của bài học đó.

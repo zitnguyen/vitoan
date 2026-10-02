@@ -1,5 +1,8 @@
 const User = require("../models/User");
 const Attempt = require("../models/Attempt");
+const Question = require("../models/Question");
+const Lesson = require("../models/Lesson");
+const Grade = require("../models/Grade");
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -16,6 +19,7 @@ function toAccountView(user) {
     isActive: user.isActive,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
+    points: user.points || 0,
   };
 }
 
@@ -154,7 +158,20 @@ async function update(req, res, next) {
     user.fullName = fullName;
     if (email) user.email = email;
     user.phone = (req.body.phone || "").trim() || undefined;
-    if (req.body.role === "Admin" || req.body.role === "Student") user.role = req.body.role;
+    if (req.body.role === "Admin" || req.body.role === "Student") {
+      if (String(user._id) === String(req.user._id) && req.body.role !== "Admin") {
+        return res.status(400).json({ success: false, message: "Không thể tự bỏ quyền quản trị của chính mình" });
+      }
+      user.role = req.body.role;
+    }
+    // Admin đặt lại mật khẩu cho tài khoản (để trống = giữ nguyên).
+    const newPassword = req.body.password || "";
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        return res.status(400).json({ success: false, message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+      }
+      user.password = newPassword;
+    }
     user.grade = user.role === "Student" ? req.body.grade || undefined : undefined;
     await user.save();
     await user.populate("grade", "name");
@@ -184,28 +201,51 @@ async function updateStatus(req, res, next) {
   }
 }
 
+// Tính điểm học tập của học sinh 1 lớp. semester = 1/2, hoặc null = cả năm.
+async function computeGradeScores(gradeId, semester) {
+  const students = await User.find({ grade: gradeId, role: "Student", isActive: true }).select(
+    "fullName username avatarUrl equippedFrame equippedTitle nameColor vipUntil"
+  );
+  const studentIds = students.map((s) => s._id);
+
+  const attempts = await Attempt.find({ student: { $in: studentIds } })
+    .select("student score lesson practiceSet")
+    .populate({ path: "lesson", select: "chapter", populate: { path: "chapter", select: "semester" } });
+
+  // Điểm học tập = tổng số câu đúng của LẦN LÀM TỐT NHẤT ở mỗi bộ luyện tập trong học kỳ.
+  // Làm lại cùng 1 bộ chỉ được tính khi làm tốt hơn, tránh "cày" điểm bằng cách làm đi làm lại.
+  const bestBySet = new Map(); // "studentId|setId" -> điểm cao nhất
+  for (const a of attempts) {
+    const sem = a.lesson?.chapter?.semester || 1;
+    if (semester && sem !== semester) continue;
+    const key = `${a.student}|${a.practiceSet || `lesson:${a.lesson?._id}`}`;
+    bestBySet.set(key, Math.max(bestBySet.get(key) || 0, a.score));
+  }
+  const scoreByStudent = new Map();
+  const setsByStudent = new Map();
+  for (const [key, best] of bestBySet) {
+    const sid = key.split("|")[0];
+    scoreByStudent.set(sid, (scoreByStudent.get(sid) || 0) + best);
+    setsByStudent.set(sid, (setsByStudent.get(sid) || 0) + 1);
+  }
+  return { students, scoreByStudent, setsByStudent };
+}
+
+// Đánh số hạng: bằng điểm thì cùng hạng (1, 2, 2, 4...).
+function assignRanks(rows) {
+  rows.forEach((r, i) => {
+    r.rank = i > 0 && r.score === rows[i - 1].score ? rows[i - 1].rank : i + 1;
+  });
+  return rows;
+}
+
 async function leaderboard(req, res, next) {
   try {
     const gradeId = req.user.grade;
     const semester = Number(req.query.semester) || 1;
     if (!gradeId) return res.json({ success: true, data: [] });
 
-    const students = await User.find({ grade: gradeId, role: "Student", isActive: true }).select(
-      "fullName username avatarUrl"
-    );
-    const studentIds = students.map((s) => s._id);
-
-    const attempts = await Attempt.find({ student: { $in: studentIds } })
-      .select("student score lesson")
-      .populate({ path: "lesson", select: "chapter", populate: { path: "chapter", select: "semester" } });
-
-    const scoreByStudent = new Map();
-    for (const a of attempts) {
-      const sem = a.lesson?.chapter?.semester || 1;
-      if (sem !== semester) continue;
-      const key = String(a.student);
-      scoreByStudent.set(key, (scoreByStudent.get(key) || 0) + a.score);
-    }
+    const { students, scoreByStudent, setsByStudent } = await computeGradeScores(gradeId, semester);
 
     const rankings = students
       .map((s) => ({
@@ -213,15 +253,65 @@ async function leaderboard(req, res, next) {
         fullName: s.fullName,
         username: s.username,
         avatarUrl: s.avatarUrl,
+        equippedFrame: s.equippedFrame,
+        equippedTitle: s.equippedTitle,
+        nameColor: s.nameColor,
+        vipUntil: s.vipUntil,
         score: scoreByStudent.get(String(s._id)) || 0,
+        sets: setsByStudent.get(String(s._id)) || 0,
         isMe: String(s._id) === String(req.user._id),
       }))
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.score - a.score || a.fullName.localeCompare(b.fullName, "vi"));
 
-    res.json({ success: true, data: rankings });
+    res.json({ success: true, data: assignRanks(rankings) });
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { listStudents, list, getOne, create, update, updateStatus, leaderboard };
+// Tên hiển thị công khai: chỉ tên gọi + chữ cái đầu của họ ("Nguyễn Văn An" -> "An N.") để không lộ họ tên trẻ em.
+function publicName(fullName = "") {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return parts[0] || "Bạn nhỏ";
+  return `${parts[parts.length - 1]} ${parts[0][0].toUpperCase()}.`;
+}
+
+// Bảng vinh danh trên trang chủ (không cần đăng nhập): top 10 cả năm của 1 lớp, chỉ học sinh đã có điểm.
+async function publicLeaderboard(req, res, next) {
+  try {
+    const gradeId = req.query.grade;
+    if (!gradeId || !/^[0-9a-f]{24}$/i.test(gradeId)) return res.json({ success: true, data: [] });
+    const { students, scoreByStudent } = await computeGradeScores(gradeId, null);
+    const rows = students
+      // Không công khai ảnh do học sinh tự tải lên (có thể là ảnh thật của trẻ) — chỉ giữ avatar hoạt hình.
+      .map((s) => ({
+        name: publicName(s.fullName),
+        avatarUrl: /^https:\/\/api\.dicebear\.com\//.test(s.avatarUrl || "") ? s.avatarUrl : "",
+        score: scoreByStudent.get(String(s._id)) || 0,
+      }))
+      .filter((r) => r.score > 0)
+      .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "vi"))
+      .slice(0, 10);
+    res.json({ success: true, data: assignRanks(rows) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Số liệu thật cho trang chủ (không cần đăng nhập).
+async function publicStats(req, res, next) {
+  try {
+    const [questions, lessons, grades, students, attempts] = await Promise.all([
+      Question.countDocuments(),
+      Lesson.countDocuments(),
+      Grade.countDocuments(),
+      User.countDocuments({ role: "Student", isActive: true }),
+      Attempt.countDocuments(),
+    ]);
+    res.json({ success: true, data: { questions, lessons, grades, students, attempts } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { listStudents, list, getOne, create, update, updateStatus, leaderboard, publicLeaderboard, publicStats };

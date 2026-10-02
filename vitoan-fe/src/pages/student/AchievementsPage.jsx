@@ -1,21 +1,18 @@
 import { useEffect, useState } from "react";
-import { Trophy, Award, BookOpen, Star, Flame, Lock, CheckCircle2 } from "lucide-react";
+import { Trophy, Award, Medal } from "../../components/ui/icons.jsx";
 import { badgeService } from "../../api/services";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
+import PageHeader, { HeaderStat } from "../../components/ui/PageHeader.jsx";
+import { Img3D } from "../../lib/icons3d.jsx";
 
-const CONDITION_ICON = {
-  lessons_completed: BookOpen,
-  perfect_score: Star,
-  streak: Flame,
+// Hình 3D & màu huy chương theo loại điều kiện
+const CONDITION_ICON = { lessons_completed: "books", perfect_score: "hundred", streak: "fire" };
+const CONDITION_RING = {
+  lessons_completed: "from-sky-300 via-blue-400 to-indigo-500",
+  perfect_score: "from-amber-200 via-amber-400 to-orange-500",
+  streak: "from-rose-300 via-pink-400 to-fuchsia-500",
 };
-
-const CONDITION_COLOR = {
-  lessons_completed: "from-secondary to-blue-600",
-  perfect_score: "from-amber-400 to-orange-500",
-  streak: "from-rose-500 to-pink-600",
-};
-
 const CONDITION_LABEL = {
   lessons_completed: (v) => `Hoàn thành ${v} bài học`,
   perfect_score: (v) => `Đạt điểm tuyệt đối ${v} lần`,
@@ -23,45 +20,45 @@ const CONDITION_LABEL = {
 };
 
 function BadgeCard({ badge, earnedAt, progressValue }) {
-  const Icon = CONDITION_ICON[badge.conditionType] || Award;
   const earned = !!earnedAt;
-  const progress = Math.min(100, Math.round(((progressValue || 0) / badge.conditionValue) * 100));
+  const value = Math.min(progressValue || 0, badge.conditionValue);
+  const progress = Math.round((value / badge.conditionValue) * 100);
+  const icon = CONDITION_ICON[badge.conditionType] || "medal";
 
   return (
     <div
       className={cn(
-        "flex flex-col items-center rounded-3xl p-5 text-center shadow-elevation-1 ring-1 transition",
-        earned ? "bg-white ring-primary/20" : "bg-slate-50 ring-slate-100"
+        "group relative flex flex-col items-center overflow-hidden rounded-[1.75rem] p-5 text-center shadow-elevation-1 transition hover:-translate-y-1",
+        earned ? "bg-gradient-to-b from-amber-50 via-white to-white" : "bg-white"
       )}
     >
-      <span
-        className={cn(
-          "relative flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-elevation-1",
-          earned ? cn("bg-gradient-to-br", CONDITION_COLOR[badge.conditionType]) : "bg-slate-300"
-        )}
-      >
-        {earned ? <Icon className="h-8 w-8" /> : <Lock className="h-7 w-7" />}
-        {earned && (
-          <span className="absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white ring-2 ring-white">
-            <CheckCircle2 className="h-3.5 w-3.5" />
+      {earned && <span aria-hidden className="pointer-events-none absolute -top-10 left-1/2 h-32 w-32 -translate-x-1/2 rounded-full bg-amber-200/60 blur-2xl" />}
+      {/* Huy chương: vòng gradient + hình 3D; chưa đạt thì xám + ổ khoá */}
+      <div className="relative">
+        <span className={cn("flex h-24 w-24 items-center justify-center rounded-full p-1.5", earned ? cn("bg-gradient-to-br shadow-lg", CONDITION_RING[badge.conditionType]) : "bg-slate-200")}>
+          <span className={cn("flex h-full w-full items-center justify-center rounded-full", earned ? "bg-white" : "bg-slate-100")}>
+            <Img3D name={icon} className={cn("h-14 w-14 transition duration-300 group-hover:scale-110", !earned && "opacity-60 saturate-[.35]")} />
           </span>
+        </span>
+        {earned ? (
+          <Img3D name="check" className="absolute -bottom-1 -right-1 h-8 w-8" />
+        ) : (
+          <Img3D name="lock" className="absolute -bottom-1 -right-1 h-8 w-8" />
         )}
-      </span>
+      </div>
 
-      <p className={cn("mt-3 font-display font-bold", earned ? "text-slate-800" : "text-slate-500")}>{badge.name}</p>
-      <p className="mt-1 text-caption text-slate-500">{badge.description || CONDITION_LABEL[badge.conditionType]?.(badge.conditionValue)}</p>
+      <p className={cn("relative mt-4 font-display text-lg font-black leading-tight", earned ? "text-[#0b2340]" : "text-slate-500")}>{badge.name}</p>
+      <p className="relative mt-1 text-sm font-semibold text-slate-500">{badge.description || CONDITION_LABEL[badge.conditionType]?.(badge.conditionValue)}</p>
 
       {earned ? (
-        <p className="mt-3 text-caption font-semibold text-primary">
-          Đạt được ngày {new Date(earnedAt).toLocaleDateString("vi-VN")}
-        </p>
+        <p className="relative mt-auto pt-3 text-sm font-black text-amber-600">🎉 Đạt ngày {new Date(earnedAt).toLocaleDateString("vi-VN")}</p>
       ) : (
-        <div className="mt-3 w-full">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+        <div className="relative mt-auto w-full pt-4">
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-gradient-to-r from-primary to-lime-400 transition-all" style={{ width: `${progress}%` }} />
           </div>
-          <p className="mt-1.5 text-caption font-semibold text-slate-400">
-            {Math.min(progressValue || 0, badge.conditionValue)}/{badge.conditionValue}
+          <p className="mt-1.5 text-sm font-black text-slate-400">
+            {value}/{badge.conditionValue}
           </p>
         </div>
       )}
@@ -96,38 +93,44 @@ export default function AchievementsPage() {
 
   const earnedByBadgeId = new Map(earned.map((sb) => [String(sb.badge?._id), sb.achievedAt]));
   const earnedCount = badges.filter((b) => earnedByBadgeId.has(String(b._id))).length;
+  // Huy hiệu đã đạt lên trước, rồi tới huy hiệu sắp đạt (tiến độ cao) để bé có động lực
+  const pct = (b) => (earnedByBadgeId.has(String(b._id)) ? 2 : Math.min(1, (stats[b.conditionType] || 0) / b.conditionValue));
+  const sortedBadges = [...badges].sort((a, b) => pct(b) - pct(a));
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-12">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-8 text-center text-white shadow-elevation-3">
-          <div className="animate-blob-float absolute -left-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-          <div
-            className="absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-white/10"
-            style={{ animation: "blob-float 7s ease-in-out infinite reverse" }}
-          />
-          <div className="relative flex flex-col items-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15">
-              <Trophy className="h-7 w-7" strokeWidth={1.75} />
-            </span>
-            <p className="mt-3 text-caption font-semibold uppercase tracking-wide text-white/80">Thành tích</p>
-            <p className="mt-1 font-display text-h1 leading-none">
-              {earnedCount}/{badges.length}
-            </p>
-            <p className="mt-2 text-body text-white/85">huy hiệu đã đạt được</p>
-          </div>
-        </div>
+    <div className="min-h-screen">
+      <div className="page">
+        <PageHeader
+          icon={Trophy}
+          tone="amber"
+          title="Thành tích"
+          subtitle="Hoàn thành bài học để mở khoá huy hiệu mới"
+          right={<HeaderStat icon={Medal} value={`${earnedCount}/${badges.length}`} label="huy hiệu đã đạt" />}
+        />
 
         {badges.length === 0 ? (
-          <div className="mt-8 flex flex-col items-center rounded-2xl bg-white p-10 text-center shadow-elevation-1 ring-1 ring-slate-100">
+          <div className="mt-5 flex flex-col items-center rounded-2xl bg-white p-10 text-center shadow-elevation-1">
             <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
               <Award className="h-7 w-7" />
             </span>
             <p className="mt-4 text-body text-slate-500">Chưa có huy hiệu nào được thiết lập.</p>
           </div>
         ) : (
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {badges.map((badge) => (
+          <>
+          {/* Tiến độ tổng */}
+          <div className="mt-6 flex flex-wrap items-center gap-4 rounded-[1.75rem] bg-white px-6 py-4 shadow-elevation-1">
+            <Img3D name="trophy" className="h-12 w-12" />
+            <div className="min-w-[12rem] flex-1">
+              <p className="font-display text-lg font-black text-[#0b2340]">
+                Em đã sưu tầm {earnedCount}/{badges.length} huy hiệu
+              </p>
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400" style={{ width: `${badges.length ? (earnedCount / badges.length) * 100 : 0}%` }} />
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+            {sortedBadges.map((badge) => (
               <BadgeCard
                 key={badge._id}
                 badge={badge}
@@ -136,6 +139,7 @@ export default function AchievementsPage() {
               />
             ))}
           </div>
+          </>
         )}
       </div>
     </div>

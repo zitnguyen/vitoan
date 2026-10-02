@@ -57,7 +57,7 @@ export default function AdminReviewContentListPage() {
   }, [search, filterSubject, filterGrade, filterChapter]);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-6xl xl:max-w-none xl:px-10 2xl:px-16 px-6 py-6">
       <h1 className="font-display text-h2 text-slate-800">Quản lý nội dung ôn tập</h1>
       <p className="mt-1 text-caption text-slate-500">
         Danh sách bài học và trạng thái nội dung lý thuyết. Bấm vào một dòng để soạn/sửa nội dung.

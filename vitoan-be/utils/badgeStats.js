@@ -1,6 +1,7 @@
 // Số liệu dùng để xét điều kiện huy hiệu — tách riêng khỏi attemptController để
 // trang "Thành tích" cũng dùng được (hiển thị tiến độ tới huy hiệu chưa đạt).
 const Attempt = require("../models/Attempt");
+const { passedLessonIds } = require("./progress");
 
 function dayKey(date) {
   return new Date(date).toISOString().slice(0, 10);
@@ -21,7 +22,8 @@ async function computeStreak(studentId) {
 
 async function computeBadgeStats(studentId) {
   const [distinctLessons, perfectCount, streak] = await Promise.all([
-    Attempt.distinct("lesson", { student: studentId }),
+    // "Hoàn thành" bài học = đạt điều kiện (>= PASS_PERCENT), không chỉ là đã làm bài.
+    passedLessonIds(studentId),
     Attempt.countDocuments({ student: studentId, $expr: { $eq: ["$score", "$totalQuestions"] } }),
     computeStreak(studentId),
   ]);

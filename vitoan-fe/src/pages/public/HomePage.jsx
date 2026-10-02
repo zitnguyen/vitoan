@@ -1,313 +1,620 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { ChevronRight, Play } from "../../components/ui/icons.jsx";
 import {
-  Sparkles,
-  Trophy,
-  Target,
-  BookOpen,
-  Gift,
-  Sprout,
-  CloudSun,
-  Star,
-  Rocket,
-  PartyPopper,
-  Divide,
-  BookOpenText,
-  BarChart3,
-  Zap,
-  Clock,
-  Play,
-} from "lucide-react";
-import { gradeService } from "../../api/services";
+  gradeService,
+  subjectService,
+  chapterService,
+  lessonService,
+  attemptService,
+  missionService,
+  userService,
+  badgeService,
+} from "../../api/services";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
-import Button from "../../components/ui/Button.jsx";
-import HeroScene from "../../components/illustrations/HeroScene.jsx";
-import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
-import SkyScene from "../../components/illustrations/SkyScene.jsx";
-import WaveDivider from "../../components/illustrations/WaveDivider.jsx";
-import Reveal from "../../components/common/Reveal.jsx";
 import { cn } from "../../lib/utils";
+import { Img3D } from "../../lib/icons3d.jsx";
+import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
+import UserAvatar from "../../components/common/UserAvatar.jsx";
+import GuestLanding from "./GuestLanding.jsx";
+import CheckInCard from "../../components/missions/CheckInCard.jsx";
 
-function SectionKicker() {
-  return <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-gradient-to-r from-primary via-secondary to-vietnamese" aria-hidden="true" />;
+// Trang chủ sau khi đăng nhập — "bảng điều khiển" cho bé (tham khảo Duolingo / VioEdu):
+// chào + chuỗi ngày học + mục tiêu hôm nay, học tiếp, lối tắt, BẢN ĐỒ PHIÊU LƯU theo chủ đề,
+// và cột phải: nhiệm vụ hôm nay, hoạt động trong tuần, xếp hạng lớp, huy hiệu.
+
+const NAVY = "#0b2340";
+const CARD = "rounded-[1.75rem] bg-white shadow-[0_14px_40px_-18px_rgba(11,35,64,0.28)]";
+const DAILY_GOAL = 3; // số lượt luyện tập mỗi ngày
+
+const SUBJECT_UI = {
+  toan: { icon: "numbers", grad: "from-sky-400 to-blue-500", soft: "bg-sky-50", ring: "ring-sky-200", text: "text-sky-600" },
+  "tieng-viet": { icon: "letters", grad: "from-amber-400 to-orange-500", soft: "bg-orange-50", ring: "ring-orange-200", text: "text-orange-600" },
+};
+
+function SectionTitle({ icon, children, to, linkText = "Xem tất cả" }) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <h2 className="flex items-center gap-2 font-display text-xl font-black" style={{ color: NAVY }}>
+        {icon && <Img3D name={icon} className="h-7 w-7" />} {children}
+      </h2>
+      {to && (
+        <Link to={to} className="flex items-center gap-0.5 text-sm font-black text-primary hover:underline">
+          {linkText} <ChevronRight className="h-4 w-4" />
+        </Link>
+      )}
+    </div>
+  );
 }
 
-const GRADE_THEMES = [
-  { bg: "bg-primary", Icon: Sprout },
-  { bg: "bg-secondary", Icon: CloudSun },
-  { bg: "bg-vietnamese", Icon: PartyPopper },
-  { bg: "bg-violet-500", Icon: Star },
-  { bg: "bg-rose-500", Icon: Rocket },
-];
+// ---------- Vòng tròn mục tiêu hôm nay ----------
+function GoalRing({ value, goal }) {
+  const pct = Math.min(1, value / goal);
+  const r = 34;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="relative h-24 w-24 shrink-0">
+      <svg viewBox="0 0 80 80" className="h-full w-full -rotate-90">
+        <circle cx="40" cy="40" r={r} stroke="#e2e8f0" strokeWidth="9" fill="none" />
+        <circle cx="40" cy="40" r={r} stroke="url(#goalGrad)" strokeWidth="9" fill="none" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct)} className="transition-[stroke-dashoffset] duration-700" />
+        <defs>
+          <linearGradient id="goalGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#22c55e" />
+            <stop offset="100%" stopColor="#00b14f" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        {pct >= 1 ? <Img3D name="check" className="h-9 w-9" /> : <span className="font-display text-2xl font-black" style={{ color: NAVY }}>{value}/{goal}</span>}
+      </div>
+    </div>
+  );
+}
 
-const STATS = [
-  { Icon: Trophy, value: "96%", label: "Học sinh tiến bộ rõ rệt sau luyện tập", color: "bg-amber-400" },
-  { Icon: Target, value: "1.000+", label: "Câu hỏi bám sát sách giáo khoa", color: "bg-secondary" },
-  { Icon: BookOpen, value: "2 môn", label: "Toán và Tiếng Việt tiểu học", color: "bg-vietnamese" },
-  { Icon: Gift, value: "Miễn phí", label: "Không giới hạn số lượt luyện tập", color: "bg-primary" },
-];
+// ---------- 1. Lời chào ----------
+function Hero({ user, stats }) {
+  const firstName = user.fullName?.split(" ").pop() || user.username;
+  const h = new Date().getHours();
+  const hi = h < 11 ? "Chào buổi sáng" : h < 14 ? "Chào buổi trưa" : h < 18 ? "Chào buổi chiều" : "Chào buổi tối";
+  const today = stats?.byDate?.[stats.byDate.length - 1]?.attempts || 0;
+  const streak = stats?.streak || 0;
+  const say =
+    today >= DAILY_GOAL
+      ? "Em đã hoàn thành mục tiêu hôm nay rồi, giỏi quá! 🎉"
+      : streak >= 2
+      ? `Em đã học ${streak} ngày liên tiếp — giữ lửa nhé!`
+      : "Mỗi ngày 3 bài luyện tập nhỏ, em sẽ tiến bộ rất nhanh!";
 
-const PROGRAMS = [
-  {
-    key: "toan",
-    name: "Toán ViToan",
-    desc: "Rèn luyện tư duy tính toán qua các dạng bài trắc nghiệm bám sát chương trình sách giáo khoa.",
-    grades: "Lớp 1 - 5",
-    color: "from-secondary to-blue-600",
-    Icon: Divide,
-  },
-  {
-    key: "tieng-viet",
-    name: "Tiếng Việt",
-    desc: "Luyện từ vựng, ngữ pháp, chính tả qua các bài luyện tập sinh động, dễ hiểu.",
-    grades: "Lớp 1 - 5",
-    color: "from-vietnamese to-orange-600",
-    Icon: BookOpenText,
-  },
-];
+  return (
+    <section className="relative overflow-clip rounded-[2.25rem] px-5 py-6 sm:px-8" style={{ background: "linear-gradient(120deg,#c9ecff 0%,#e7dcff 55%,#ffe1f0 100%)" }}>
+      <div aria-hidden className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/40 blur-2xl" />
+      <Img3D name="sparkles" className="absolute right-[38%] top-4 hidden h-8 w-8 opacity-80 md:block" />
+      <div className="relative flex flex-col items-center gap-6 lg:flex-row">
+        <div className="flex flex-1 flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
+          <OwlMascot className="h-32 w-32 shrink-0 sm:h-36 sm:w-36" />
+          <div className="min-w-0">
+            <p className="font-bold text-slate-500">{hi},</p>
+            <h1 className="font-display text-3xl font-black leading-tight sm:text-4xl" style={{ color: NAVY }}>
+              {firstName} ơi! 👋
+            </h1>
+            <p className="mt-2 max-w-md font-semibold text-slate-600">{say}</p>
+          </div>
+        </div>
 
-const WHY_CHOOSE = [
-  { Icon: BarChart3, title: "Theo dõi tiến độ rõ ràng", desc: "Xem lại lịch sử làm bài, điểm số từng lượt luyện tập để biết mình đã tiến bộ ra sao.", color: "bg-secondary" },
-  { Icon: Zap, title: "Chấm điểm tức thì", desc: "Nộp bài là có kết quả ngay, kèm giải thích chi tiết cho từng câu hỏi.", color: "bg-amber-400" },
-  { Icon: Clock, title: "Học mọi lúc, mọi nơi", desc: "Chỉ cần trình duyệt web, luyện tập bất cứ khi nào em rảnh.", color: "bg-violet-500" },
-  { Icon: Gift, title: "Hoàn toàn miễn phí", desc: "Luyện tập không giới hạn số lượt, không mất phí.", color: "bg-rose-500" },
-];
+        <div className="grid w-full grid-cols-3 gap-3 lg:w-auto">
+          <div className="flex flex-col items-center justify-center rounded-3xl bg-white/80 px-4 py-3 backdrop-blur">
+            <Img3D name="fire" className="h-10 w-10" />
+            <p className="mt-1 font-display text-2xl font-black text-orange-500">{streak}</p>
+            <p className="text-xs font-bold text-slate-500">ngày liên tiếp</p>
+          </div>
+          <div className="flex flex-col items-center justify-center rounded-3xl bg-white/80 px-4 py-3 backdrop-blur">
+            <Img3D name="gem" className="h-10 w-10" />
+            <p className="mt-1 font-display text-2xl font-black text-sky-500">{(user.points ?? 0).toLocaleString("vi-VN")}</p>
+            <p className="text-xs font-bold text-slate-500">điểm thưởng</p>
+          </div>
+          <div className="flex flex-col items-center justify-center rounded-3xl bg-white/80 px-3 py-2 backdrop-blur">
+            <GoalRing value={Math.min(today, DAILY_GOAL)} goal={DAILY_GOAL} />
+            <p className="text-xs font-bold text-slate-500">mục tiêu hôm nay</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------- 2. Học tiếp ----------
+function ContinueCard({ item, fallbackTo }) {
+  const pct = item?.total ? Math.round((item.answered / item.total) * 100) : 0;
+  return (
+    <Link
+      to={item?.to || fallbackTo}
+      className="group relative flex items-center gap-4 overflow-clip rounded-[1.75rem] bg-gradient-to-r from-primary to-emerald-500 p-5 text-white shadow-[0_16px_36px_-16px_rgba(0,177,79,0.7)] transition hover:-translate-y-0.5"
+    >
+      <div aria-hidden className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/15" />
+      <Img3D name="rocket" className="relative h-16 w-16 shrink-0 transition group-hover:-translate-y-1 group-hover:rotate-6 sm:h-20 sm:w-20" />
+      <div className="relative min-w-0 flex-1">
+        <p className="text-sm font-black uppercase tracking-wide text-white/80">{item ? item.sub : "Bắt đầu hành trình"}</p>
+        <p className="truncate font-display text-xl font-black sm:text-2xl">{item ? item.title : "Chọn chủ đề đầu tiên và học ngay!"}</p>
+        {item?.total > 0 && (
+          <div className="mt-2 h-2.5 w-full max-w-sm overflow-clip rounded-full bg-white/30">
+            <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
+          </div>
+        )}
+      </div>
+      <span className="relative hidden shrink-0 items-center gap-2 rounded-full bg-white px-5 py-2.5 font-black text-primary shadow sm:flex">
+        <Play className="h-4 w-4 fill-current" /> {item ? "Học tiếp" : "Bắt đầu"}
+      </span>
+    </Link>
+  );
+}
+
+// ---------- 3. Lối tắt ----------
+function QuickTiles({ gradeSlug }) {
+  const base = gradeSlug ? `/lop/${gradeSlug}` : "/chon-lop";
+  const tiles = [
+    { to: gradeSlug ? `${base}/toan` : base, icon: "numbers", label: "Toán", tint: "from-sky-100 to-sky-200" },
+    { to: gradeSlug ? `${base}/tieng-viet` : base, icon: "letters", label: "Tiếng Việt", tint: "from-orange-100 to-amber-200" },
+    { to: "/kiem-tra", icon: "clipboard", label: "Kiểm tra", tint: "from-violet-100 to-violet-200" },
+    { to: "/on-tap", icon: "brain", label: "Ôn tập", tint: "from-pink-100 to-pink-200" },
+    { to: "/ban-dong-hanh", icon: "chat", label: "Hỏi cú AI", tint: "from-emerald-100 to-emerald-200" },
+    { to: "/doi-qua", icon: "gift", label: "Đổi quà", tint: "from-yellow-100 to-amber-200" },
+  ];
+  return (
+    <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+      {tiles.map((t) => (
+        <Link
+          key={t.label}
+          to={t.to}
+          className={cn("group flex flex-col items-center gap-1.5 rounded-3xl bg-gradient-to-br px-2 py-4 text-center transition hover:-translate-y-1 hover:shadow-lg", t.tint)}
+        >
+          <Img3D name={t.icon} className="h-12 w-12 transition duration-300 group-hover:scale-110 sm:h-14 sm:w-14" />
+          <span className="font-display text-sm font-black sm:text-base" style={{ color: NAVY }}>
+            {t.label}
+          </span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+// ---------- 4. Bản đồ phiêu lưu ----------
+const MAP_X = [50, 76, 50, 24]; // vị trí ngang (%) của các trạm, lặp lại thành đường zíc-zắc
+const MAP_X_NARROW = [18, 30]; // điện thoại: trạm lệch trái, nhãn luôn bên phải
+const ROW_H = 132;
+
+// true khi màn hẹp (< 640px) — bản đồ đổi cách xếp để nhãn không tràn
+function useIsNarrow() {
+  const query = "(max-width: 639px)";
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
+
+const DECOR = ["sunflower", "star", "books", "blossom", "pencil", "glowStar", "ruler", "puzzle"];
+const MAP_TOP = 96; // chừa chỗ cho cú đứng trên trạm đầu
+
+function AdventureMap({ user, subjects: rawSubjects }) {
+  const subjects = useMemo(() => [...rawSubjects].sort((a, b) => (a.slug === "toan" ? -1 : b.slug === "toan" ? 1 : 0)), [rawSubjects]);
+  const [subjectSlug, setSubjectSlug] = useState(subjects[0]?.slug || "toan");
+  const [data, setData] = useState(null);
+  const [semester, setSemester] = useState(null);
+  const narrow = useIsNarrow();
+  const subject = subjects.find((s) => s.slug === subjectSlug);
+
+  useEffect(() => {
+    if (!subject) return undefined;
+    let cancelled = false;
+    setData(null);
+    Promise.all([
+      chapterService.list({ grade: user.grade._id, subject: subject._id }),
+      lessonService.list({ grade: user.grade._id, subject: subject._id }),
+      attemptService.completedLessons().catch(() => ({ data: [] })),
+    ])
+      .then(([chRes, lsRes, doneRes]) => {
+        if (cancelled) return;
+        const done = new Set(doneRes.data);
+        const nodes = chRes.data.map((c) => {
+          const lessons = lsRes.data.filter((l) => (l.chapter?._id || l.chapter) === c._id);
+          const completed = lessons.filter((l) => done.has(l._id)).length;
+          return { ...c, total: lessons.length || c.lessonCount || 0, completed };
+        });
+        setData(nodes);
+        // mặc định mở học kỳ có chủ đề đang học dở
+        const cur = nodes.find((n) => n.completed < n.total);
+        setSemester((cur || nodes[0])?.semester || 1);
+      })
+      .catch(() => !cancelled && setData([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [subject, user.grade._id]);
+
+  const ui = SUBJECT_UI[subjectSlug] || SUBJECT_UI.toan;
+  const semesters = [...new Set((data || []).map((n) => n.semester || 1))].sort();
+  const all = data || [];
+  const globalCurrent = all.findIndex((n) => n.completed < n.total);
+  const nodes = all.map((n, idx) => ({ ...n, idx })).filter((n) => (n.semester || 1) === semester);
+  const xs = narrow ? MAP_X_NARROW : MAP_X;
+  const pts = nodes.map((_, i) => [xs[i % xs.length], i * ROW_H + MAP_TOP]);
+  const mapH = nodes.length * ROW_H + MAP_TOP - 40;
+  const pathD = pts.reduce((d, [x, y], i) => {
+    if (i === 0) return `M ${x} ${y}`;
+    const [px, py] = pts[i - 1];
+    const my = (py + y) / 2;
+    return `${d} C ${px} ${my}, ${x} ${my}, ${x} ${y}`;
+  }, "");
+
+  return (
+    <section className={cn(CARD, "p-5 sm:p-6")}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 font-display text-xl font-black" style={{ color: NAVY }}>
+          <Img3D name="flag" className="h-8 w-8" /> Bản đồ phiêu lưu {user.grade.name}
+        </h2>
+        <div className="flex rounded-full bg-slate-100 p-1">
+          {subjects.map((s) => (
+            <button
+              key={s._id}
+              type="button"
+              onClick={() => setSubjectSlug(s.slug)}
+              className={cn("rounded-full px-4 py-1.5 text-sm font-black transition", s.slug === subjectSlug ? cn("bg-gradient-to-r text-white shadow", (SUBJECT_UI[s.slug] || SUBJECT_UI.toan).grad) : "text-slate-500 hover:text-slate-800")}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!data ? (
+        <div className="flex justify-center py-16">
+          <Spinner />
+        </div>
+      ) : data.length === 0 ? (
+        <p className="py-10 text-center font-semibold text-slate-400">Chưa có chủ đề cho môn này.</p>
+      ) : (
+        <>
+        {semesters.length > 1 && (
+          <div className="mt-4 flex gap-2">
+            {semesters.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSemester(s)}
+                className={cn("rounded-full px-4 py-1.5 text-sm font-black transition", s === semester ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:text-slate-800")}
+              >
+                Học kỳ {s}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className={cn("relative mt-4 overflow-clip rounded-[1.5rem] px-2", ui.soft)} style={{ height: mapH }}>
+          {/* đường đi chấm nối các trạm */}
+          <svg aria-hidden className="absolute inset-0 h-full w-full" viewBox={`0 0 100 ${mapH}`} preserveAspectRatio="none">
+            <path d={pathD} fill="none" stroke="#cbd5e1" strokeDasharray="2.5 2.5" vectorEffect="non-scaling-stroke" style={{ strokeWidth: 5 }} />
+          </svg>
+          {nodes.map((n, i) => {
+            const [x, y] = pts[i];
+            const isDone = n.total > 0 && n.completed >= n.total;
+            const isCurrent = n.idx === globalCurrent;
+            const labelLeft = !narrow && x > 50; // nhãn nằm phía đối diện để không tràn
+            // hình trang trí ở phía còn trống của hàng
+            const decorX = x === 76 ? 10 : x === 24 ? 90 : 12;
+            return (
+              <div key={n._id}>
+                <Img3D
+                  name={DECOR[n.idx % DECOR.length]}
+                  className="absolute hidden h-10 w-10 -translate-x-1/2 -translate-y-1/2 opacity-90 sm:block"
+                  style={{ left: `${decorX}%`, top: y + (i % 2 ? 18 : -14), animation: `float-soft ${4 + (i % 3)}s ease-in-out infinite` }}
+                />
+                <Link
+                  to={`/lop/${user.grade.slug}/${subjectSlug}?chu-de=${n._id}`}
+                  className="group absolute -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: `${x}%`, top: y }}
+                  title={n.title}
+                >
+                  {isCurrent && (
+                    <span className="absolute -top-16 left-1/2 flex -translate-x-1/2 flex-col items-center">
+                      <span className="whitespace-nowrap rounded-full bg-white px-3 py-1 text-xs font-black text-primary shadow">Học tiếp nè!</span>
+                      <OwlMascot className="-mt-1 h-12 w-12" />
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "relative flex items-center justify-center rounded-full font-display font-black transition group-hover:scale-110",
+                      isCurrent ? "h-20 w-20 text-3xl text-white" : "h-16 w-16 text-2xl",
+                      isDone && "bg-gradient-to-b from-lime-400 to-green-500 text-white shadow-[0_6px_0_0_#15803d]",
+                      isCurrent && cn("bg-gradient-to-b shadow-[0_6px_0_0_rgba(11,35,64,0.35)] ring-8", ui.grad, ui.ring),
+                      !isDone && !isCurrent && "bg-white text-slate-400 shadow-[0_6px_0_0_#cbd5e1]"
+                    )}
+                  >
+                    {isCurrent && <span className="absolute inset-0 animate-ping rounded-full bg-white/30" />}
+                    {isDone ? <Img3D name="check" className="h-9 w-9" /> : n.idx + 1}
+                  </span>
+                  <span
+                    className={cn(
+                      "absolute top-1/2 w-36 -translate-y-1/2 rounded-2xl bg-white px-3 py-2 text-left shadow-md sm:w-52",
+                      labelLeft ? "right-full mr-4" : "left-full ml-4"
+                    )}
+                  >
+                    <span className="line-clamp-2 text-sm font-black leading-snug" style={{ color: NAVY }}>
+                      {n.title}
+                    </span>
+                    <span className="mt-1 flex items-center gap-2">
+                      <span className="h-1.5 flex-1 overflow-clip rounded-full bg-slate-100">
+                        <span className={cn("block h-full rounded-full", isDone ? "bg-green-500" : "bg-amber-400")} style={{ width: `${n.total ? (n.completed / n.total) * 100 : 0}%` }} />
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">
+                        {n.completed}/{n.total}
+                      </span>
+                    </span>
+                  </span>
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+// ---------- 5. Cột phải ----------
+function DailyMissions({ missions }) {
+  const daily = (missions || []).filter((m) => m.type === "daily").slice(0, 4);
+  return (
+    <section className={cn(CARD, "p-5")}>
+      <SectionTitle icon="target" to="/nhiem-vu">
+        Nhiệm vụ hôm nay
+      </SectionTitle>
+      {!missions ? (
+        <div className="flex justify-center py-6">
+          <Spinner />
+        </div>
+      ) : daily.length === 0 ? (
+        <p className="text-sm font-semibold text-slate-400">Chưa có nhiệm vụ.</p>
+      ) : (
+        <div className="space-y-3">
+          {daily.map((m) => {
+            const done = m.progress >= m.goalValue;
+            const pct = Math.min(100, Math.round((m.progress / m.goalValue) * 100));
+            return (
+              <div key={m._id} className={cn("rounded-2xl p-3", done ? "bg-green-50" : "bg-slate-50")}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="min-w-0 truncate text-sm font-black" style={{ color: NAVY }}>
+                    {m.title}
+                  </p>
+                  {m.claimed ? (
+                    <Img3D name="check" className="h-6 w-6 shrink-0" />
+                  ) : (
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs font-black text-sky-600">
+                      <Img3D name="gem" className="h-4 w-4" />+{m.rewardPoints}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="h-2 flex-1 overflow-clip rounded-full bg-white">
+                    <div className={cn("h-full rounded-full", done ? "bg-green-500" : "bg-gradient-to-r from-amber-400 to-orange-400")} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs font-bold text-slate-400">
+                    {Math.min(m.progress, m.goalValue)}/{m.goalValue}
+                  </span>
+                </div>
+                {done && !m.claimed && (
+                  <Link to="/nhiem-vu" className="mt-2 block rounded-xl bg-amber-400 py-1.5 text-center text-sm font-black text-white">
+                    Nhận thưởng!
+                  </Link>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+const WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+function WeekActivity({ stats }) {
+  const days = (stats?.byDate || []).slice(-7);
+  const max = Math.max(1, ...days.map((d) => d.attempts));
+  return (
+    <section className={cn(CARD, "p-5")}>
+      <SectionTitle icon="calendar" to="/thong-ke" linkText="Thống kê">
+        Tuần này của em
+      </SectionTitle>
+      <div className="flex h-32 items-end justify-between gap-2">
+        {days.map((d, i) => {
+          const isToday = i === days.length - 1;
+          return (
+            <div key={d.date} className="flex flex-1 flex-col items-center gap-1.5">
+              <span className="text-xs font-black text-slate-400">{d.attempts || ""}</span>
+              <div className="flex h-20 w-full items-end">
+                <div
+                  className={cn("w-full rounded-t-xl transition-all", d.attempts ? (isToday ? "bg-gradient-to-t from-primary to-lime-400" : "bg-gradient-to-t from-sky-400 to-sky-300") : "bg-slate-100")}
+                  style={{ height: `${d.attempts ? Math.max(14, (d.attempts / max) * 100) : 10}%` }}
+                />
+              </div>
+              <span className={cn("text-xs font-black", isToday ? "text-primary" : "text-slate-400")}>{WEEKDAYS[new Date(d.date).getDay()]}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+const PODIUM_BG = ["bg-amber-100", "bg-slate-100", "bg-orange-100"];
+
+function ClassRank({ rows }) {
+  const top = (rows || []).slice(0, 3);
+  const me = (rows || []).find((r) => r.isMe);
+  return (
+    <section className={cn(CARD, "p-5")}>
+      <SectionTitle icon="trophy" to="/xep-hang">
+        Bảng xếp hạng lớp
+      </SectionTitle>
+      {!rows ? (
+        <div className="flex justify-center py-6">
+          <Spinner />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {top.map((r, i) => (
+            <div key={r._id} className={cn("flex items-center gap-3 rounded-2xl px-3 py-2", PODIUM_BG[i], r.isMe && "ring-2 ring-primary")}>
+              <span className="w-5 text-center font-display text-lg font-black text-slate-500">{r.rank}</span>
+              <UserAvatar user={r} size="h-9 w-9" />
+              <span className="min-w-0 flex-1 truncate text-sm font-black" style={{ color: NAVY }}>
+                {r.fullName}
+                {r.isMe && " (em)"}
+              </span>
+              <span className="text-sm font-black text-primary">{r.score}</span>
+            </div>
+          ))}
+          {me && me.rank > 3 && (
+            <div className="flex items-center gap-3 rounded-2xl bg-green-50 px-3 py-2 ring-2 ring-primary">
+              <span className="w-5 text-center font-display text-lg font-black text-primary">{me.rank}</span>
+              <UserAvatar user={me} size="h-9 w-9" />
+              <span className="min-w-0 flex-1 truncate text-sm font-black" style={{ color: NAVY }}>
+                Em
+              </span>
+              <span className="text-sm font-black text-primary">{me.score}</span>
+            </div>
+          )}
+          {top.length === 0 && <p className="text-sm font-semibold text-slate-400">Học bài đầu tiên để lên bảng nhé!</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function BadgeCard({ earned, total }) {
+  const pct = total ? Math.round((earned / total) * 100) : 0;
+  return (
+    <Link to="/thanh-tich" className={cn(CARD, "group flex items-center gap-4 p-5 transition hover:-translate-y-0.5")}>
+      <Img3D name="medal" className="h-16 w-16 shrink-0 transition group-hover:rotate-6 group-hover:scale-110" />
+      <div className="min-w-0 flex-1">
+        <p className="font-display text-lg font-black" style={{ color: NAVY }}>
+          Huy hiệu của em
+        </p>
+        <p className="text-sm font-bold text-slate-500">
+          Đã có <span className="text-amber-500">{earned}</span>/{total} huy hiệu
+        </p>
+        <div className="mt-2 h-2.5 overflow-clip rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-amber-500" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ---------- Trang ----------
+function StudentHome({ user }) {
+  const [subjects, setSubjects] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [missions, setMissions] = useState(null);
+  const [rank, setRank] = useState(null);
+  const [badges, setBadges] = useState({ earned: 0, total: 0 });
+  const [continueItem, setContinueItem] = useState(null);
+
+  useEffect(() => {
+    subjectService.list().then((r) => setSubjects(r.data)).catch(() => {});
+    attemptService.stats().then((r) => setStats(r.data)).catch(() => setStats({}));
+    missionService.list().then((r) => setMissions(r.data)).catch(() => setMissions([]));
+    userService.leaderboard(1).then((r) => setRank(r.data)).catch(() => setRank([]));
+    Promise.all([badgeService.list(), badgeService.myBadges()])
+      .then(([all, mine]) => setBadges({ total: all.data.length, earned: mine.data.length }))
+      .catch(() => {});
+    attemptService
+      .myProgressList()
+      .then((r) => {
+        const p = r.data[0];
+        if (p)
+          setContinueItem({
+            title: p.lesson.title,
+            sub: `Đang làm dở ${p.answered}/${p.total} câu`,
+            answered: p.answered,
+            total: p.total,
+            to: p.practiceSet ? `/luyen-tap/${p.practiceSet._id}` : `/bai/${p.lesson._id}/luyen-tap`,
+          });
+      })
+      .catch(() => {});
+  }, []);
+
+  const fallbackTo = user.grade?.slug ? `/lop/${user.grade.slug}/toan` : "/chon-lop";
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6 px-4 pb-16 pt-6 sm:px-6 xl:max-w-none xl:px-10 2xl:px-16">
+      <Hero user={user} stats={stats} />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="space-y-6">
+          <ContinueCard item={continueItem} fallbackTo={fallbackTo} />
+          <QuickTiles gradeSlug={user.grade?.slug} />
+          {user.grade && subjects.length > 0 && <AdventureMap user={user} subjects={subjects} />}
+          {!user.grade && (
+            <Link to="/chon-lop" className={cn(CARD, "block p-6 text-center font-black text-primary")}>
+              Chọn lớp của em để bắt đầu học →
+            </Link>
+          )}
+        </div>
+        <aside className="space-y-6">
+          <CheckInCard compact onCheckedIn={() => missionService.list().then((r) => setMissions(r.data)).catch(() => {})} />
+          <DailyMissions missions={missions} />
+          <WeekActivity stats={stats} />
+          <ClassRank rows={rank} />
+          <BadgeCard {...badges} />
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+// Tài khoản không phải học sinh (admin xem thử): chỉ lời chào + danh sách lớp.
+function OtherHome({ user }) {
+  const [grades, setGrades] = useState([]);
+  useEffect(() => {
+    gradeService.list().then((r) => setGrades(r.data)).catch(() => {});
+  }, []);
+  return (
+    <div className="mx-auto max-w-6xl space-y-6 px-4 pb-16 pt-6 sm:px-6">
+      <section className="flex items-center gap-5 rounded-[2.25rem] px-6 py-6" style={{ background: "linear-gradient(120deg,#c9ecff 0%,#e7dcff 55%,#ffe1f0 100%)" }}>
+        <OwlMascot className="h-28 w-28" />
+        <div>
+          <h1 className="font-display text-3xl font-black" style={{ color: NAVY }}>
+            Xin chào {user.fullName || user.username}!
+          </h1>
+          <p className="font-semibold text-slate-600">Chọn lớp để xem nội dung như học sinh.</p>
+        </div>
+      </section>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {grades.map((g) => (
+          <Link key={g._id} to={`/lop/${g.slug}/toan`} className={cn(CARD, "p-5 text-center font-display text-xl font-black transition hover:-translate-y-1")} style={{ color: NAVY }}>
+            {g.name}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
   const { user } = useAuth();
-  const [grades, setGrades] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { hash } = useLocation();
 
+  // Bấm menu "/#chon-lop"... thì cuộn tới đúng mục
   useEffect(() => {
-    gradeService
-      .list()
-      .then((res) => setGrades(res.data))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!hash) return undefined;
+    const t = setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    return () => clearTimeout(t);
+  }, [hash]);
 
-  return (
-    <div>
-      {/* Hero */}
-      <section className="relative overflow-hidden pb-6">
-        <SkyScene className="absolute inset-0 -z-10 h-full w-full" />
-
-        {/* floating decorative shapes */}
-        <Star className="absolute left-[8%] top-20 hidden h-6 w-6 animate-bounce-soft text-white drop-shadow sm:block" style={{ animationDelay: "0.3s" }} fill="currentColor" />
-        <Star className="absolute right-[12%] top-32 hidden h-4 w-4 animate-bounce-soft text-white drop-shadow sm:block" style={{ animationDelay: "1.1s" }} fill="currentColor" />
-        <div className="absolute left-[18%] top-40 hidden h-10 w-10 animate-spin-slow rounded-2xl bg-white/25 sm:block" />
-        <div className="absolute right-[6%] top-16 hidden h-14 w-14 animate-blob-float rounded-full bg-white/20 md:block" />
-
-        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-4 pb-8 pt-16 md:grid-cols-2 md:pt-24">
-          <Reveal className="text-center md:text-left">
-            <span className="animate-badge-pulse inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-1.5 text-caption font-semibold text-primary shadow-elevation-2 ring-2 ring-white">
-              <Sparkles className="h-4 w-4 animate-bounce-soft" /> Nền tảng tự học Toán &amp; Tiếng Việt
-            </span>
-            <h1 className="mt-5 font-display text-h1 leading-[1.1] text-white [text-shadow:0_3px_0_rgba(11,35,64,0.18)]">
-              Học mà chơi cùng
-              <br />
-              <span
-                className="relative inline-block text-vietnamese"
-                style={{ WebkitTextStroke: "2px #fff", textShadow: "4px 4px 0 rgba(11,35,64,0.15)" }}
-              >
-                ViToan
-              </span>
-            </h1>
-            <p className="mx-auto mt-5 max-w-md text-body-lg text-white/90 md:mx-0">
-              Luyện tập trắc nghiệm Toán &amp; Tiếng Việt theo từng lớp, chấm điểm tức thì,
-              giúp các em tự tin hơn mỗi ngày.
-            </p>
-            <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row md:justify-start">
-              <Button
-                to={user ? (user.grade?.slug ? `/lop/${user.grade.slug}/toan` : "/chon-lop") : "/dang-ky"}
-                className="group rounded-2xl border-b-4 border-primary-dark px-7 py-3 text-base transition-all duration-150 hover:-translate-y-0.5 active:translate-y-1 active:border-b-0"
-              >
-                <span className="inline-flex items-center gap-2">
-                  {user ? "Vào học ngay" : "Trải nghiệm ngay"}
-                  <Rocket className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-                </span>
-              </Button>
-              {!user && (
-                <Button
-                  to="/dang-nhap"
-                  variant="outline"
-                  className="rounded-2xl border-b-4 border-slate-300 bg-white px-7 py-3 text-base transition-all duration-150 hover:-translate-y-0.5 active:translate-y-1 active:border-b-0"
-                >
-                  Đăng nhập
-                </Button>
-              )}
-            </div>
-            <a
-              href="#chuong-trinh"
-              className="group mt-6 inline-flex items-center gap-3 text-white"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-primary shadow-elevation-2 transition-transform duration-300 group-hover:scale-110">
-                <Play className="h-4 w-4 fill-current" />
-              </span>
-              <span className="font-semibold [text-shadow:0_1px_2px_rgba(11,35,64,0.25)] group-hover:underline">Xem cách ViToan hoạt động</span>
-            </a>
-          </Reveal>
-          <Reveal delay={150} className="flex justify-center">
-            <HeroScene className="h-64 w-64 sm:h-80 sm:w-80" />
-          </Reveal>
-        </div>
-
-        <div className="relative z-10 mx-auto max-w-6xl px-4 pt-6">
-          <div className="grid grid-cols-2 gap-6 rounded-3xl bg-white p-8 shadow-elevation-3 ring-4 ring-white/60 sm:grid-cols-4">
-            {STATS.map((stat, idx) => (
-              <Reveal key={stat.value} delay={idx * 90} className="group flex flex-col items-center text-center">
-                <span className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-elevation-1 transition-transform duration-300 group-hover:-translate-y-1 group-hover:rotate-6 ${stat.color}`}>
-                  <stat.Icon className="h-6 w-6" strokeWidth={2} />
-                </span>
-                <span className="mt-3 font-display text-h3 text-slate-800">{stat.value}</span>
-                <span className="mt-1 text-caption leading-snug text-slate-500">{stat.label}</span>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-        <WaveDivider color="#f8fafc" className="relative z-0 -mt-1" />
-      </section>
-
-      {/* Chọn lớp */}
-      <section id="chon-lop" className="relative mx-auto max-w-6xl px-4 py-16">
-        <PartyPopper className="absolute -left-2 top-6 hidden h-8 w-8 -rotate-12 text-vietnamese/60 sm:block" />
-        <Reveal>
-          <SectionKicker />
-          <h2 className="text-center font-display text-h2 text-slate-800">Chọn lớp của em để bắt đầu</h2>
-          <p className="mt-2 text-center text-body text-slate-500">
-            Nội dung luyện tập được thiết kế riêng cho từng khối lớp
-          </p>
-        </Reveal>
-
-        {user?.role === "Student" && user?.grade && (
-          <Reveal delay={60}>
-            <Link
-              to={`/lop/${user.grade.slug}/toan`}
-              className="group mt-6 flex items-center gap-4 rounded-3xl bg-gradient-to-r from-primary to-secondary p-5 text-white shadow-elevation-2 transition hover:-translate-y-0.5 hover:shadow-elevation-3"
-            >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15">
-                <Rocket className="h-6 w-6" />
-              </span>
-              <div className="flex-1">
-                <p className="text-caption font-semibold uppercase tracking-wide text-white/80">Lớp của em</p>
-                <p className="font-display text-h3">Vào học {user.grade.name}</p>
-              </div>
-              <span className="shrink-0 whitespace-nowrap rounded-xl bg-white px-4 py-2 text-sm font-bold text-primary transition group-hover:bg-white/90">
-                Vào học ngay
-              </span>
-            </Link>
-          </Reveal>
-        )}
-
-        {loading ? (
-          <div className="mt-10 flex justify-center">
-            <Spinner />
-          </div>
-        ) : (
-          <div className="mt-8 grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-5">
-            {grades.map((grade, idx) => {
-              const theme = GRADE_THEMES[idx % GRADE_THEMES.length];
-              const isActive = user?.grade?._id === grade._id;
-              return (
-                <Reveal key={grade._id} delay={idx * 70} as={Link} to={`/lop/${grade.slug}/toan`}
-                  className={cn(
-                    "group flex flex-col items-center justify-center gap-3 rounded-3xl bg-white p-6 text-center shadow-elevation-2 ring-2 ring-slate-100 transition duration-300 hover:-translate-y-1.5 hover:rotate-1 hover:ring-primary/40 hover:shadow-elevation-3",
-                    isActive && "ring-primary/50"
-                  )}
-                >
-                  <span className={`flex h-14 w-14 items-center justify-center rounded-2xl text-white ${theme.bg} shadow-elevation-1 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110`}>
-                    <theme.Icon className="h-6 w-6" strokeWidth={2} />
-                  </span>
-                  <span className="font-display text-h3 text-slate-800">{grade.name}</span>
-                </Reveal>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* Chương trình học */}
-      <section id="chuong-trinh" className="bg-slate-50/80 py-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <Reveal>
-            <SectionKicker />
-            <h2 className="text-center font-display text-h2 text-slate-800">
-              Chương trình học được quan tâm nhất
-            </h2>
-            <p className="mt-2 text-center text-body text-slate-500">Bám sát chương trình sách giáo khoa tiểu học</p>
-          </Reveal>
-
-          <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {PROGRAMS.map((program, idx) => (
-              <Reveal
-                key={program.key}
-                delay={idx * 120}
-                className={`group relative overflow-hidden rounded-3xl border-4 border-white bg-gradient-to-br ${program.color} p-8 text-white shadow-elevation-3 transition-transform duration-300 hover:-translate-y-1.5 sm:p-10`}
-              >
-                <div className="animate-blob-float absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10" />
-                <div className="absolute -bottom-6 right-10 h-14 w-14 rounded-2xl bg-white/10" style={{ animation: "blob-float 7s ease-in-out infinite reverse" }} />
-                <span className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 backdrop-blur transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
-                  <program.Icon className="h-8 w-8" strokeWidth={1.75} />
-                </span>
-                <h3 className="relative mt-5 font-display text-h3">{program.name}</h3>
-                <p className="relative mt-2 text-body leading-relaxed text-white/85">{program.desc}</p>
-                <span className="relative mt-5 inline-block rounded-full bg-white/20 px-4 py-1.5 text-sm font-semibold">
-                  {program.grades}
-                </span>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Vì sao chọn ViToan */}
-      <section id="vi-sao" className="mx-auto max-w-6xl px-4 py-16">
-        <Reveal>
-          <SectionKicker />
-          <h2 className="text-center font-display text-h2 text-slate-800">Vì sao chọn ViToan</h2>
-          <p className="mt-2 text-center text-body text-slate-500">Học tập hiệu quả, đơn giản và miễn phí</p>
-        </Reveal>
-
-        <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {WHY_CHOOSE.map((item, idx) => (
-            <Reveal
-              key={item.title}
-              delay={idx * 100}
-              className="group rounded-2xl bg-white p-7 text-center shadow-elevation-2 ring-2 ring-slate-100 transition duration-300 hover:-translate-y-1 hover:shadow-elevation-3"
-            >
-              <span className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-elevation-1 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110 ${item.color}`}>
-                <item.Icon className="h-6 w-6" strokeWidth={2} />
-              </span>
-              <h3 className="mt-4 font-display font-bold text-slate-800">{item.title}</h3>
-              <p className="mt-2 text-caption leading-relaxed text-slate-500">{item.desc}</p>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="mx-auto max-w-6xl px-4 pb-20">
-        <Reveal className="relative flex flex-col items-center justify-between gap-5 overflow-hidden rounded-3xl bg-gradient-to-r from-primary to-secondary px-8 py-12 text-center text-white shadow-elevation-3 sm:flex-row sm:text-left">
-          <div className="animate-blob-float absolute -left-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-          <Star className="absolute right-24 top-6 hidden h-5 w-5 animate-bounce-soft text-white/70 sm:block" fill="currentColor" />
-          <OwlMascot className="absolute -right-4 bottom-0 hidden h-28 w-28 opacity-90 drop-shadow-lg sm:block" />
-          <div className="relative">
-            <h3 className="font-display text-h3">
-              {user ? "Sẵn sàng luyện tập tiếp chưa?" : "Sẵn sàng bắt đầu luyện tập?"}
-            </h3>
-            <p className="mt-1.5 text-body text-white/85">
-              {user ? "Tiếp tục hành trình chinh phục kiến thức của em." : "Đăng ký miễn phí và luyện tập ngay hôm nay."}
-            </p>
-          </div>
-          <Button
-            to={user ? (user.grade?.slug ? `/lop/${user.grade.slug}/toan` : "/chon-lop") : "/dang-ky"}
-            variant="outline"
-            className="relative whitespace-nowrap rounded-full border-0 bg-white px-7 py-3 text-base text-primary shadow-elevation-2 transition-transform hover:-translate-y-0.5 hover:bg-slate-100 hover:shadow-elevation-3 sm:mr-24"
-          >
-            {user ? "Vào học ngay" : "Đăng ký ngay"}
-          </Button>
-        </Reveal>
-      </section>
-    </div>
-  );
+  const isStudent = useMemo(() => user?.role === "Student", [user]);
+  if (!user) return <GuestLanding />;
+  return isStudent ? <StudentHome user={user} /> : <OtherHome user={user} />;
 }

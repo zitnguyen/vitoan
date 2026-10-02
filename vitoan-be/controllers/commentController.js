@@ -6,7 +6,7 @@ async function listByLesson(req, res, next) {
     const skip = (Number(page) - 1) * Number(limit);
     const [comments, total] = await Promise.all([
       Comment.find({ lesson: req.params.lessonId })
-        .populate({ path: "user", select: "fullName avatarUrl role grade", populate: { path: "grade", select: "name" } })
+        .populate({ path: "user", select: "fullName avatarUrl role grade equippedFrame equippedTitle nameColor vipUntil", populate: { path: "grade", select: "name" } })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit)),
@@ -25,7 +25,7 @@ async function create(req, res, next) {
       return res.status(400).json({ success: false, message: "Nội dung bình luận không được để trống" });
     }
     const comment = await Comment.create({ lesson, user: req.user._id, text: text.trim() });
-    await comment.populate({ path: "user", select: "fullName avatarUrl role grade", populate: { path: "grade", select: "name" } });
+    await comment.populate({ path: "user", select: "fullName avatarUrl role grade equippedFrame equippedTitle nameColor vipUntil", populate: { path: "grade", select: "name" } });
     res.status(201).json({ success: true, data: comment });
   } catch (err) {
     next(err);

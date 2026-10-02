@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Mic, Plus, Trash2, MessageCircle } from "lucide-react";
+import { Send, Mic, Plus, Trash2, Bot } from "../../components/ui/icons.jsx";
 import { chatService } from "../../api/services";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
+import PageHeader from "../../components/ui/PageHeader.jsx";
 
 function useSpeechRecognition(onResult) {
   const recognitionRef = useRef(null);
@@ -101,9 +102,12 @@ export default function AIChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-5 px-4 py-8 lg:grid-cols-[280px_1fr]">
-        <div className="rounded-3xl bg-white p-4 shadow-elevation-1 ring-1 ring-slate-100">
+    <div className="min-h-screen">
+      <div className="page pb-0">
+        <PageHeader icon={Bot} tone="violet" title="Bạn đồng hành" subtitle="Hỏi cú ViToan bất cứ điều gì về bài học nhé!" />
+      </div>
+      <div className="page grid grid-cols-1 gap-5 lg:grid-cols-[280px_1fr]">
+        <div className="rounded-3xl bg-white p-4 shadow-elevation-1">
           <button
             type="button"
             onClick={newConversation}
@@ -143,7 +147,7 @@ export default function AIChatPage() {
           </div>
         </div>
 
-        <div className="flex flex-col rounded-3xl bg-white shadow-elevation-1 ring-1 ring-slate-100">
+        <div className="flex flex-col rounded-3xl bg-white shadow-elevation-1">
           <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-4">
             <OwlMascot className="h-9 w-9" animated={false} />
             <div>
@@ -152,11 +156,29 @@ export default function AIChatPage() {
             </div>
           </div>
 
-          <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4" style={{ minHeight: 360, maxHeight: 480 }}>
+          <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4" style={{ height: "calc(100vh - 400px)", minHeight: 360 }}>
             {messages.length === 0 && (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-400">
-                <MessageCircle className="h-8 w-8" />
-                <p className="text-caption">Hỏi mình bất cứ điều gì về bài học nhé!</p>
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                <OwlMascot className="h-28 w-28" />
+                <p className="font-display text-2xl font-black text-[#0b2340]">Chào em! Cú ViToan đây 👋</p>
+                <p className="max-w-sm font-semibold text-slate-500">Em chưa hiểu bài nào? Hỏi cú nhé — hoặc bấm thử một câu dưới đây:</p>
+                <div className="mt-2 flex max-w-lg flex-wrap justify-center gap-2">
+                  {[
+                    "Phép cộng có nhớ là gì?",
+                    "Làm sao để so sánh hai số?",
+                    "Từ chỉ sự vật là gì?",
+                    "Khi nào viết ch, khi nào viết tr?",
+                  ].map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setInput(q)}
+                      className="rounded-full bg-gradient-to-r from-sky-50 to-violet-50 px-4 py-2 text-sm font-bold text-slate-600 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:text-primary hover:ring-primary/40"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {messages.map((m, idx) => (

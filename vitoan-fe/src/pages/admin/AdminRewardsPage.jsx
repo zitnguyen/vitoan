@@ -4,17 +4,50 @@ import { rewardService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
+import { useDialog } from "../../context/DialogContext.jsx";
 
 const ICONS = { star: Star, sparkles: Sparkles, medal: Medal, smile: Smile, crown: Crown, gift: Gift };
-const ICON_OPTIONS = Object.keys(ICONS);
 
-const EMPTY_FORM = { name: "", description: "", costPoints: 50, icon: "gift", stock: -1, isActive: true };
+const EMPTY_FORM = {
+  name: "",
+  description: "",
+  type: "frame",
+  value: "star",
+  durationDays: 7,
+  costPoints: 50,
+  icon: "gift",
+  stock: -1,
+  isActive: true,
+};
+
+// Tên hiển thị cho các mã giá trị (khung, kiểu avatar, màu tên).
+const VALUE_LABELS = {
+  leaf: "Lá xanh", star: "Ngôi sao", flower: "Hoa xuân", rainbow: "Cầu vồng", fire: "Ngọn lửa", ice: "Băng giá",
+  galaxy: "Vũ trụ", gold: "Vàng hoàng gia", "big-smile": "Mặt cười", thumbs: "Ngón cái", adventurer: "Nhà thám hiểm",
+  bottts: "Robot", "pixel-art": "Pixel", "fun-emoji": "Emoji", lorelei: "Tí hon", avataaars: "Hoạt hình", micah: "Nét vẽ",
+  croodles: "Vẽ nguệch ngoạc", blue: "Xanh biển", orange: "Cam", purple: "Tím", vip: "VIP",
+};
+
+// Loại quà + các giá trị hợp lệ (khớp với FRAMES/NAME_COLORS ở frontend học sinh).
+const TYPE_OPTIONS = {
+  frame: { label: "Khung avatar", values: ["leaf", "star", "flower", "rainbow", "fire", "ice", "galaxy", "gold"], icon: "star" },
+  avatar: {
+    label: "Ảnh đại diện (DiceBear)",
+    values: ["big-smile", "thumbs", "adventurer", "bottts", "pixel-art", "fun-emoji", "lorelei", "avataaars", "micah", "croodles"],
+    icon: "smile",
+  },
+  title: { label: "Danh hiệu (gõ chữ)", values: null, icon: "medal" },
+  name_color: { label: "Màu tên", values: ["blue", "orange", "purple", "rainbow"], icon: "sparkles" },
+  vip: { label: "VIP có thời hạn", values: ["vip"], icon: "crown" },
+  other: { label: "Quà khác / hiện vật", values: null, icon: "gift" },
+};
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20";
 const filterSelectClass =
   "w-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20";
 
 export default function AdminRewardsPage() {
+  const dialog = useDialog();
   const [rewards, setRewards] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -46,7 +79,7 @@ export default function AdminRewardsPage() {
     return true;
   });
 
-  function startEdit(reward) {
+  async function startEdit(reward) {
     setEditingId(reward._id);
     setShowForm(true);
     setForm({
@@ -54,12 +87,15 @@ export default function AdminRewardsPage() {
       description: reward.description || "",
       costPoints: reward.costPoints,
       icon: reward.icon || "gift",
+      type: reward.type || "other",
+      value: reward.value || "",
+      durationDays: reward.durationDays || 7,
       stock: reward.stock,
       isActive: reward.isActive,
     });
   }
 
-  function resetForm() {
+  async function resetForm() {
     setEditingId(null);
     setShowForm(false);
     setForm(EMPTY_FORM);
@@ -87,7 +123,7 @@ export default function AdminRewardsPage() {
   }
 
   async function handleDelete(id) {
-    if (!confirm("Xóa phần thưởng này?")) return;
+    if (!(await dialog.confirm({ message: "Xóa phần thưởng này?", danger: true, confirmText: "Xoá" }))) return;
     await rewardService.remove(id);
     await loadRewards();
   }
@@ -98,9 +134,9 @@ export default function AdminRewardsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-6xl xl:max-w-none xl:px-10 2xl:px-16 px-6 py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-h2 text-slate-800">Quản lý đổi điểm</h1>
+        <h1 className="font-display text-h2 text-slate-800">Phần quà</h1>
         <Button
           onClick={() => {
             resetForm();
@@ -116,49 +152,116 @@ export default function AdminRewardsPage() {
           onSubmit={handleSubmit}
           className="mt-6 space-y-3 rounded-2xl bg-white p-6 shadow-elevation-1 ring-1 ring-slate-100"
         >
-          <input
-            className={inputClass}
-            placeholder="Tên phần quà hoặc voucher"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            required
-          />
-          <textarea
-            className={inputClass}
-            placeholder="Mô tả"
-            rows={2}
-            value={form.description}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-          />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label className="block">
+              <span className="text-caption font-semibold text-slate-500">Loại quà</span>
+              <select
+                className={`${inputClass} mt-1`}
+                value={form.type}
+                onChange={(e) => {
+                  const t = TYPE_OPTIONS[e.target.value];
+                  setForm((f) => ({ ...f, type: e.target.value, value: t.values?.[0] || "", icon: t.icon }));
+                }}
+              >
+                {Object.entries(TYPE_OPTIONS).map(([key, t]) => (
+                  <option key={key} value={key}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {form.type !== "other" && (
+              <label className="block">
+                <span className="text-caption font-semibold text-slate-500">Giá trị áp dụng</span>
+                {TYPE_OPTIONS[form.type]?.values ? (
+                  <select
+                    className={`${inputClass} mt-1`}
+                    value={form.value}
+                    onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                  >
+                    {TYPE_OPTIONS[form.type].values.map((v) => (
+                      <option key={v} value={v}>
+                        {VALUE_LABELS[v] || v}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={`${inputClass} mt-1`}
+                    placeholder="VD: Thần đồng Toán"
+                    value={form.value}
+                    onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                    required
+                  />
+                )}
+              </label>
+            )}
+            {form.type === "vip" && (
+              <label className="block">
+                <span className="text-caption font-semibold text-slate-500">Số ngày hiệu lực</span>
+                <input
+                  type="number"
+                  min={1}
+                  className={`${inputClass} mt-1`}
+                  value={form.durationDays}
+                  onChange={(e) => setForm((f) => ({ ...f, durationDays: Number(e.target.value) }))}
+                />
+              </label>
+            )}
+          </div>
+          <label className="block">
+            <span className="text-caption font-semibold text-slate-500">Tên phần quà *</span>
             <input
-              type="number"
-              min={1}
-              className={inputClass}
-              placeholder="Số điểm cần đổi"
-              value={form.costPoints}
-              onChange={(e) => setForm((f) => ({ ...f, costPoints: Number(e.target.value) }))}
+              className={`${inputClass} mt-1`}
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               required
             />
-            <input
-              type="number"
-              min={-1}
-              className={inputClass}
-              placeholder="Số lượng (-1 = không giới hạn)"
-              value={form.stock}
-              onChange={(e) => setForm((f) => ({ ...f, stock: Number(e.target.value) }))}
+          </label>
+          <label className="block">
+            <span className="text-caption font-semibold text-slate-500">Mô tả (học sinh sẽ thấy)</span>
+            <textarea
+              className={`${inputClass} mt-1`}
+              rows={2}
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             />
-            <select
-              className={inputClass}
-              value={form.icon}
-              onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
-            >
-              {ICON_OPTIONS.map((key) => (
-                <option key={key} value={key}>
-                  {key}
-                </option>
-              ))}
-            </select>
+          </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-caption font-semibold text-slate-500">Số điểm cần để đổi *</span>
+              <input
+                type="number"
+                min={1}
+                className={`${inputClass} mt-1`}
+                value={form.costPoints}
+                onChange={(e) => setForm((f) => ({ ...f, costPoints: Number(e.target.value) }))}
+                required
+              />
+            </label>
+            <div>
+              <span className="text-caption font-semibold text-slate-500">Số lượng có thể đổi</span>
+              <div className="mt-1 flex items-center gap-3">
+                <label className="flex shrink-0 items-center gap-2 font-semibold text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 accent-primary"
+                    checked={form.stock < 0}
+                    onChange={(e) => setForm((f) => ({ ...f, stock: e.target.checked ? -1 : 10 }))}
+                  />
+                  Không giới hạn
+                </label>
+                {form.stock >= 0 && (
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    value={form.stock}
+                    onChange={(e) => setForm((f) => ({ ...f, stock: Math.max(0, Number(e.target.value)) }))}
+                  />
+                )}
+              </div>
+            </div>
           </div>
           <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
             <input
@@ -222,6 +325,10 @@ export default function AdminRewardsPage() {
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-2 font-display font-bold text-slate-800">
                       {reward.name}
+                      <span className="shrink-0 rounded-full bg-secondary/10 px-2 py-0.5 text-caption font-semibold text-secondary">
+                        {TYPE_OPTIONS[reward.type || "other"]?.label}
+                        {reward.value && reward.type !== "other" ? ` · ${reward.value}` : ""}
+                      </span>
                       <span
                         className={cn(
                           "shrink-0 rounded-full px-2 py-0.5 text-caption font-semibold",

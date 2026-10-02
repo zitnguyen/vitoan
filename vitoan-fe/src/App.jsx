@@ -7,6 +7,8 @@ import AdminShell from "./components/admin/AdminShell.jsx";
 
 import HomePage from "./pages/public/HomePage.jsx";
 import LessonListPage from "./pages/public/LessonListPage.jsx";
+import NewsPage from "./pages/public/NewsPage.jsx";
+import NewsDetailPage from "./pages/public/NewsDetailPage.jsx";
 import LoginPage from "./pages/auth/LoginPage.jsx";
 import RegisterPage from "./pages/auth/RegisterPage.jsx";
 import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage.jsx";
@@ -30,14 +32,12 @@ import AdminLessonsPage from "./pages/admin/AdminLessonsPage.jsx";
 import AdminQuestionsPage from "./pages/admin/AdminQuestionsPage.jsx";
 import AdminPracticeSetsPage from "./pages/admin/AdminPracticeSetsPage.jsx";
 import AdminReviewContentPage from "./pages/admin/AdminReviewContentPage.jsx";
-import AdminReviewContentListPage from "./pages/admin/AdminReviewContentListPage.jsx";
 import AdminQuestionBankPage from "./pages/admin/AdminQuestionBankPage.jsx";
-import AdminPracticeSetListPage from "./pages/admin/AdminPracticeSetListPage.jsx";
 import AdminTestsPage from "./pages/admin/AdminTestsPage.jsx";
 import AdminAccountsPage from "./pages/admin/AdminAccountsPage.jsx";
 import AdminRewardsPage from "./pages/admin/AdminRewardsPage.jsx";
+import AdminNewsPage from "./pages/admin/AdminNewsPage.jsx";
 import NotFoundPage from "./pages/common/NotFoundPage.jsx";
-import ComingSoonPage from "./pages/common/ComingSoonPage.jsx";
 import MissionsPage from "./pages/student/MissionsPage.jsx";
 import RewardsPage from "./pages/student/RewardsPage.jsx";
 
@@ -57,11 +57,17 @@ function AdminLayout({ children }) {
 export default function App() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
+  // Chế độ tập trung khi đang làm bài: ẩn header/footer để trang làm bài gọn, không bị phân tâm.
+  const isFocusRoute =
+    /^\/luyen-tap\//.test(location.pathname) ||
+    /^\/bai\/[^/]+\/luyen-tap/.test(location.pathname) ||
+    /^\/kiem-tra\/(?!ket-qua)[^/]+$/.test(location.pathname);
+  const hideChrome = isAdminRoute || isFocusRoute;
 
   return (
     <div className="flex min-h-screen flex-col">
       <ScrollToTop />
-      {!isAdminRoute && <SiteHeader />}
+      {!hideChrome && <SiteHeader />}
       <main className="flex-1">
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -179,7 +185,10 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/dau-truong" element={<ComingSoonPage title="Đấu trường ViToan" description="Sắp tới em có thể thi đấu trực tiếp với các bạn học khác tại đây." />} />
+          {/* Các trang chưa làm (Đấu trường, Khoá học, Liên hệ) đã bỏ — link cũ quay về trang chủ */}
+          <Route path="/dau-truong" element={<Navigate to="/" replace />} />
+          <Route path="/mua-khoa-hoc" element={<Navigate to="/" replace />} />
+          <Route path="/lien-he" element={<Navigate to="/" replace />} />
           <Route
             path="/doi-qua"
             element={
@@ -188,9 +197,8 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/mua-khoa-hoc" element={<ComingSoonPage title="Khoá học nâng cao" description="ViToan hiện hoàn toàn miễn phí. Các gói khoá học nâng cao (nếu có) sẽ được thông báo tại đây." />} />
-          <Route path="/tin-tuc" element={<ComingSoonPage title="Tin tức" description="Những bài viết, mẹo học tập và tin tức mới nhất từ ViToan sẽ được cập nhật tại đây." />} />
-          <Route path="/lien-he" element={<ComingSoonPage title="Liên hệ" description="Trang liên hệ đang được hoàn thiện. Bạn có thể nhắn tin qua trang chủ để được hỗ trợ." />} />
+          <Route path="/tin-tuc" element={<NewsPage />} />
+          <Route path="/tin-tuc/:id" element={<NewsDetailPage />} />
           <Route
             path="/ban-dong-hanh"
             element={
@@ -242,11 +250,7 @@ export default function App() {
           />
           <Route
             path="/admin/noi-dung-on-tap"
-            element={
-              <AdminLayout>
-                <AdminReviewContentListPage />
-              </AdminLayout>
-            }
+            element={<Navigate to="/admin/bai-hoc" replace />}
           />
           <Route
             path="/admin/ngan-hang-cau-hoi"
@@ -258,11 +262,7 @@ export default function App() {
           />
           <Route
             path="/admin/danh-sach-luyen-tap"
-            element={
-              <AdminLayout>
-                <AdminPracticeSetListPage />
-              </AdminLayout>
-            }
+            element={<Navigate to="/admin/bai-hoc" replace />}
           />
           <Route
             path="/admin/kiem-tra"
@@ -281,6 +281,14 @@ export default function App() {
             }
           />
           <Route
+            path="/admin/tin-tuc"
+            element={
+              <AdminLayout>
+                <AdminNewsPage />
+              </AdminLayout>
+            }
+          />
+          <Route
             path="/admin/doi-diem"
             element={
               <AdminLayout>
@@ -292,7 +300,7 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
-      {!isAdminRoute && <SiteFooter />}
+      {!hideChrome && <SiteFooter />}
     </div>
   );
 }

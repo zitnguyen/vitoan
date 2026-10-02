@@ -2,6 +2,9 @@
 // tiến độ riêng — tránh lệch dữ liệu khi học sinh làm bài rồi tiến độ không cập
 // nhật kịp. periodKey dùng để chống nhận thưởng 2 lần trong cùng 1 kỳ.
 const Attempt = require("../models/Attempt");
+const TestAttempt = require("../models/TestAttempt");
+const CheckIn = require("../models/CheckIn");
+const { vnDayKey } = require("./checkin");
 
 function dayKey(date) {
   return new Date(date).toISOString().slice(0, 10);
@@ -35,6 +38,17 @@ async function computeMissionProgress(studentId, mission, now = new Date()) {
 
   if (mission.goalType === "perfect_score") {
     return Attempt.countDocuments({ ...query, $expr: { $eq: ["$score", "$totalQuestions"] } });
+  }
+  if (mission.goalType === "checkin_days") {
+    // Điểm danh lưu theo ngày giờ Việt Nam ("YYYY-MM-DD") nên so theo dayKey
+    return CheckIn.countDocuments({ student: studentId, dayKey: { $gte: vnDayKey(start), $lt: vnDayKey(end) } });
+  }
+  if (mission.goalType === "tests_completed") {
+    return TestAttempt.countDocuments(query);
+  }
+  if (mission.goalType === "correct_answers") {
+    const [row] = await Attempt.aggregate([{ $match: query }, { $group: { _id: null, total: { $sum: "$score" } } }]);
+    return row?.total || 0;
   }
   if (mission.goalType === "lessons_completed") {
     const ids = await Attempt.distinct("lesson", query);

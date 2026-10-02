@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "../../components/ui/icons.jsx";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
 
 export default function ComingSoonPage({ title = "Tính năng", description }) {
   return (
-    <div className="flex min-h-[70vh] flex-col items-center justify-center px-4 text-center">
+    <div className="flex min-h-[50vh] flex-col items-center justify-center px-4 py-8 text-center">
       <OwlMascot className="h-28 w-28" covering />
       <span className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-vietnamese/10 px-4 py-1.5 text-caption font-bold uppercase tracking-wide text-vietnamese">
         Đang phát triển

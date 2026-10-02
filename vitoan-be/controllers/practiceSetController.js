@@ -105,7 +105,10 @@ async function getOne(req, res, next) {
   try {
     const set = await PracticeSet.findById(req.params.id).populate("questions");
     if (!set) return res.status(404).json({ success: false, message: "Không tìm thấy bài luyện tập" });
-    const lesson = await Lesson.findById(set.lesson).select("isTrial");
+    const lesson = await Lesson.findById(set.lesson)
+      .select("isTrial title chapter subject grade")
+      .populate("subject", "name slug")
+      .populate("grade", "name slug");
     if (!req.user && !lesson?.isTrial) {
       return res.status(401).json({ success: false, message: "Vui lòng đăng nhập để làm bài luyện tập này" });
     }
@@ -115,9 +118,13 @@ async function getOne(req, res, next) {
       data: {
         _id: set._id,
         lesson: set.lesson,
+        lessonInfo: lesson
+          ? { _id: lesson._id, title: lesson.title, chapter: lesson.chapter, subject: lesson.subject, grade: lesson.grade }
+          : null,
         title: set.title,
         level: set.level,
         timeLimitSeconds: set.timeLimitSeconds,
+        isPublished: set.isPublished,
         questions: isAdmin ? set.questions : set.questions.map(stripQuestion),
       },
     });

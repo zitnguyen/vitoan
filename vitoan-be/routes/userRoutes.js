@@ -1,9 +1,11 @@
 const express = require("express");
-const { listStudents, list, getOne, create, update, updateStatus, leaderboard } = require("../controllers/userController");
+const { listStudents, list, getOne, create, update, updateStatus, leaderboard, publicLeaderboard, publicStats } = require("../controllers/userController");
 const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+router.get("/stats/public", publicStats);
+router.get("/leaderboard/public", publicLeaderboard);
 router.get("/leaderboard", protect, authorize("Student"), leaderboard);
 router.get("/students", protect, authorize("Admin"), listStudents);
 router.get("/", protect, authorize("Admin"), list);

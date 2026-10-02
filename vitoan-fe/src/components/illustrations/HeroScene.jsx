@@ -1,4 +1,4 @@
-import { Award, BookOpenText, PenLine, Star } from "lucide-react";
+import { Award, BookOpenText, PenLine, Star } from "../ui/icons.jsx";
 import OwlHero from "./OwlHero.jsx";
 
 function PropCard({ className, style, children }) {

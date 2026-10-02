@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { History, Inbox, ChevronRight, Award, ClipboardCheck, BookOpen } from "lucide-react";
+import { History, Inbox, ChevronRight, Award, ClipboardCheck, BookOpen } from "../../components/ui/icons.jsx";
 import { attemptService, badgeService, testAttemptService } from "../../api/services";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
+import PageHeader, { HeaderStat } from "../../components/ui/PageHeader.jsx";
+import { Img3D } from "../../lib/icons3d.jsx";
+import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
 
 function EmptyState({ text }) {
   return (
-    <div className="flex flex-col items-center rounded-2xl bg-white p-10 text-center shadow-elevation-1 ring-1 ring-slate-100">
-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-        <Inbox className="h-7 w-7" />
-      </span>
-      <p className="mt-4 text-body text-slate-500">{text}</p>
+    <div className="flex flex-col items-center rounded-[1.75rem] bg-white p-10 text-center shadow-elevation-1">
+      <OwlMascot className="h-24 w-24" />
+      <p className="mt-3 font-display text-lg font-black text-[#0b2340]">{text}</p>
+      <Link to="/" className="mt-4 rounded-full bg-primary px-6 py-2.5 font-black text-white shadow-[0_4px_0_0_#049245] transition hover:-translate-y-0.5">
+        Học ngay thôi!
+      </Link>
     </div>
   );
 }
@@ -26,7 +30,7 @@ function AttemptCard({ attempt, subtitle, to, accent }) {
   return (
     <Link
       to={to}
-      className="group flex items-center justify-between gap-3 rounded-2xl bg-white p-5 shadow-elevation-1 ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-elevation-2 hover:ring-primary/30"
+      className="group flex items-center justify-between gap-3 rounded-2xl bg-white p-5 shadow-elevation-1 transition hover:-translate-y-0.5 hover:shadow-elevation-2 hover:ring-primary/30"
     >
       <div className="min-w-0">
         <p className="truncate font-display font-bold text-slate-800">{subtitle}</p>
@@ -75,49 +79,30 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-6xl px-4 py-12">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="flex items-center gap-2 font-display text-h2 text-slate-800">
-            <History className="h-7 w-7 text-primary" /> Lịch sử làm bài
-          </h1>
-          <div className="flex gap-3">
-            <div className="flex items-center gap-2.5 rounded-2xl bg-white px-4 py-3 shadow-elevation-1 ring-1 ring-slate-100">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <BookOpen className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="font-display text-lg font-extrabold leading-none text-slate-800">{attempts.length}</p>
-                <p className="text-caption text-slate-500">lượt luyện tập</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 rounded-2xl bg-white px-4 py-3 shadow-elevation-1 ring-1 ring-slate-100">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-vietnamese/10 text-vietnamese">
-                <ClipboardCheck className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="font-display text-lg font-extrabold leading-none text-slate-800">{testAttempts.length}</p>
-                <p className="text-caption text-slate-500">lượt kiểm tra</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 rounded-2xl bg-white px-4 py-3 shadow-elevation-1 ring-1 ring-slate-100">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-500">
-                <Award className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="font-display text-lg font-extrabold leading-none text-slate-800">{badges.length}</p>
-                <p className="text-caption text-slate-500">huy hiệu</p>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen">
+      <div className="page">
+        <PageHeader
+          icon={History}
+          tone="green"
+          title="Lịch sử làm bài"
+          subtitle="Xem lại kết quả các lượt luyện tập và kiểm tra"
+          right={
+            <>
+              <HeaderStat icon={BookOpen} value={attempts.length} label="luyện tập" />
+              <HeaderStat icon={ClipboardCheck} value={testAttempts.length} label="kiểm tra" />
+              <HeaderStat icon={Award} value={badges.length} label="huy hiệu" />
+            </>
+          }
+        />
 
-        <section className="mt-8">
-          <h2 className="flex items-center gap-1.5 font-display text-h3 text-slate-800">
+        <section className="mt-5">
+          <h2 className="section-title">
             <Award className="h-5 w-5 text-amber-500" /> Huy hiệu của em
           </h2>
           {badges.length === 0 ? (
-            <p className="mt-3 text-caption text-slate-500">Chưa có huy hiệu nào. Hoàn thành bài học để nhận huy hiệu!</p>
+            <Link to="/thanh-tich" className="mt-3 flex items-center gap-3 rounded-2xl bg-white px-5 py-3 font-semibold text-slate-500 shadow-elevation-1 transition hover:-translate-y-0.5">
+              <Img3D name="lock" className="h-9 w-9" /> Chưa có huy hiệu nào — hoàn thành bài học để mở khoá nhé! <span className="ml-auto font-black text-primary">Xem huy hiệu →</span>
+            </Link>
           ) : (
             <div className="mt-3 flex flex-wrap gap-3">
               {badges.map((sb) => (
@@ -138,9 +123,9 @@ export default function HistoryPage() {
           )}
         </section>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-2">
+        <div className="mt-5 grid gap-8 lg:grid-cols-2">
           <section>
-            <h2 className="flex items-center gap-1.5 font-display text-h3 text-slate-800">
+            <h2 className="section-title">
               <BookOpen className="h-5 w-5 text-primary" /> Các lượt luyện tập
             </h2>
             {attempts.length === 0 ? (
@@ -163,7 +148,7 @@ export default function HistoryPage() {
           </section>
 
           <section>
-            <h2 className="flex items-center gap-1.5 font-display text-h3 text-slate-800">
+            <h2 className="section-title">
               <ClipboardCheck className="h-5 w-5 text-vietnamese" /> Các lượt kiểm tra
             </h2>
             {testAttempts.length === 0 ? (

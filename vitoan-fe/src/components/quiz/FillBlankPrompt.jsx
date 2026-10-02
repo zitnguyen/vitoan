@@ -9,7 +9,7 @@ export default function FillBlankPrompt({ text, value, onChange, disabled = fals
         const idx = line.indexOf("___");
         if (idx === -1) {
           return (
-            <p key={i} className="text-body-lg font-semibold text-slate-800">
+            <p key={i} className="text-2xl font-semibold leading-relaxed text-slate-800">
               {line}
             </p>
           );
@@ -17,7 +17,7 @@ export default function FillBlankPrompt({ text, value, onChange, disabled = fals
         const before = line.slice(0, idx);
         const after = line.slice(idx + 3);
         return (
-          <div key={i} className="flex flex-wrap items-center gap-2 text-body-lg font-semibold text-slate-800">
+          <div key={i} className="flex flex-wrap items-center gap-2 text-2xl font-semibold leading-relaxed text-slate-800">
             {before && <span>{before}</span>}
             <input
               type="text"
@@ -27,7 +27,7 @@ export default function FillBlankPrompt({ text, value, onChange, disabled = fals
               placeholder="?"
               autoComplete="off"
               disabled={disabled}
-              className="w-28 rounded-xl border-2 border-primary/40 bg-primary/5 px-3 py-2 text-center text-body-lg font-bold text-primary outline-none focus:border-primary disabled:opacity-70"
+              className="w-32 rounded-xl border-2 border-primary/40 bg-primary/5 px-3 py-2 text-center text-2xl font-bold text-primary outline-none focus:border-primary disabled:opacity-70"
             />
             {after && <span>{after}</span>}
           </div>

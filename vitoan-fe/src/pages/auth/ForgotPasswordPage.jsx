@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { User, KeyRound, Lock, CheckCircle2, AlertCircle } from "lucide-react";
+import { User, KeyRound, Lock, CheckCircle2, AlertCircle } from "../../components/ui/icons.jsx";
 import { authService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
 import PasswordInput from "../../components/ui/PasswordInput.jsx";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
 import { BlobBackground } from "../../components/illustrations/Decorations.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
+import { Img3D } from "../../lib/icons3d.jsx";
 
 function fieldClass(hasError) {
   const base = "mt-1 w-full rounded-xl border bg-slate-50 px-3 py-2.5 focus:bg-white focus:outline-none focus:ring-2";
@@ -149,14 +150,18 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-clip">
       <BlobBackground className="pointer-events-none absolute inset-0 -z-10" />
-      <div className="mx-auto flex max-w-4xl items-center justify-center px-4 py-12 md:py-20">
-        <div className="grid w-full grid-cols-1 overflow-hidden rounded-3xl bg-white shadow-elevation-4 md:grid-cols-2">
-          <div className="hidden flex-col items-center justify-center bg-gradient-to-br from-primary to-secondary p-8 text-center text-white md:flex">
-            <OwlMascot className="h-40 w-40 drop-shadow-lg" covering={passwordFocused} shake={shake} />
-            <h2 className="mt-4 font-display text-h3">Quên mật khẩu?</h2>
-            <p className="mt-2 text-body text-white/80">Đừng lo, chỉ mất một phút để lấy lại mật khẩu qua email.</p>
+      <div className="mx-auto flex max-w-4xl items-center justify-center px-4 py-6 md:py-10">
+        <div className="grid w-full grid-cols-1 overflow-clip rounded-[2rem] bg-white shadow-[0_30px_70px_-30px_rgba(11,35,64,0.45)] md:grid-cols-2">
+          <div className="relative hidden flex-col items-center justify-center overflow-clip p-10 text-center md:flex" style={{ background: "linear-gradient(150deg,#d7f5e3 0%,#e6f7d4 55%,#fff6d6 100%)" }}>
+            <div aria-hidden className="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rounded-full bg-white/50 blur-2xl" />
+            <Img3D name="key" className="absolute left-8 top-10 h-14 w-14 animate-[float-soft_4s_ease-in-out_infinite]" />
+            <Img3D name="shield" className="absolute right-10 top-16 h-12 w-12 animate-[float-soft_5s_ease-in-out_infinite]" />
+            <Img3D name="sparkles" className="absolute bottom-12 left-12 h-10 w-10 animate-[float-soft_4.5s_ease-in-out_infinite]" />
+            <OwlMascot className="relative h-44 w-44 drop-shadow-[0_16px_20px_rgba(11,35,64,0.18)]" covering={passwordFocused} shake={shake} />
+            <h2 className="relative mt-4 font-display text-3xl font-black text-[#0b2340]">Quên mật khẩu?</h2>
+            <p className="relative mt-2 max-w-xs font-semibold text-slate-600">Đừng lo, chỉ mất một phút để lấy lại mật khẩu qua email.</p>
           </div>
 
           <div className="flex flex-col justify-center p-8 sm:p-10">

@@ -10,7 +10,8 @@ const missionSchema = new mongoose.Schema(
     type: { type: String, enum: ["daily", "weekly"], required: true },
     goalType: {
       type: String,
-      enum: ["attempts_count", "lessons_completed", "perfect_score"],
+      // checkin_days: số ngày điểm danh; tests_completed: số bài kiểm tra; correct_answers: tổng câu trả lời đúng
+      enum: ["attempts_count", "lessons_completed", "perfect_score", "checkin_days", "tests_completed", "correct_answers"],
       required: true,
     },
     goalValue: { type: Number, required: true, min: 1 },
