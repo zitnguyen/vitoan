@@ -51,6 +51,10 @@ async function getOne(req, res, next) {
     }
     const lesson = await Lesson.findById(req.params.id).populate("subject", "name slug").populate("grade", "name slug order");
     if (!lesson) return res.status(404).json({ success: false, message: "Không tìm thấy bài học" });
+    // Học sinh chỉ được vào bài của đúng lớp mình đã chọn.
+    if (req.user?.role === "Student" && req.user.grade && String(lesson.grade?._id) !== String(req.user.grade._id || req.user.grade)) {
+      return res.status(403).json({ success: false, message: `Bài học này thuộc ${lesson.grade?.name || "lớp khác"}, không phải lớp em đã chọn.` });
+    }
     const data = lesson.toObject();
     data.likeCount = lesson.likedBy.length;
     data.likedByMe = !!(req.user && lesson.likedBy.some((id) => id.toString() === req.user._id.toString()));

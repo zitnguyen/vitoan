@@ -4,6 +4,7 @@ const TestAttempt = require("../models/TestAttempt");
 const { gradeAnswer } = require("../utils/grading");
 const { chatCompletion } = require("../utils/openai");
 const { buildTestFeedback } = require("../utils/analysis");
+const { learningStatus } = require("./testController");
 
 async function submit(req, res, next) {
   try {
@@ -11,17 +12,28 @@ async function submit(req, res, next) {
     if (!testId || !Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ success: false, message: "Thiếu dữ liệu bài làm" });
     }
-    const test = await Test.findById(testId).select("_id");
-    if (!test) return res.status(404).json({ success: false, message: "Không tìm thấy bài kiểm tra" });
+    const test = await Test.findById(testId).select("_id questions subject grade chapter semester isActive");
+    if (!test || (!test.isActive && req.user.role !== "Admin")) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bài kiểm tra" });
+    }
+    if (req.user.role === "Student") {
+      const ls = await learningStatus(test, req.user._id, new Map());
+      if (ls.locked) {
+        return res.status(403).json({ success: false, message: "Em cần học xong các bài trong phạm vi đề trước khi nộp bài kiểm tra" });
+      }
+    }
 
-    const questionIds = answers.map((a) => a.question);
-    const questions = await Question.find({ _id: { $in: questionIds } });
+    // Chấm theo đúng danh sách câu của đề: câu lạ/trùng bị bỏ qua, câu không trả lời tính là sai.
+    const questions = await Question.find({ _id: { $in: test.questions } });
     const questionMap = new Map(questions.map((q) => [String(q._id), q]));
+    const givenById = new Map();
+    for (const a of answers) if (!givenById.has(String(a.question))) givenById.set(String(a.question), a);
 
-    const gradedAnswers = answers.map((a) => {
-      const question = questionMap.get(String(a.question));
+    const gradedAnswers = test.questions.map((id) => {
+      const question = questionMap.get(String(id));
+      const a = givenById.get(String(id)) || {};
       const correct = gradeAnswer(question, a);
-      return { question: a.question, selectedIndex: a.selectedIndex ?? -1, textAnswer: a.textAnswer || "", correct };
+      return { question: id, selectedIndex: a.selectedIndex ?? -1, textAnswer: a.textAnswer || "", correct };
     });
     const score = gradedAnswers.filter((a) => a.correct).length;
 
@@ -31,7 +43,7 @@ async function submit(req, res, next) {
       answers: gradedAnswers,
       score,
       totalQuestions: gradedAnswers.length,
-      durationSeconds: durationSeconds || 0,
+      durationSeconds: Math.max(0, Math.min(Number(durationSeconds) || 0, 6 * 3600)),
     });
 
     res.status(201).json({ success: true, data: attempt });
@@ -115,7 +127,8 @@ async function myHistory(req, res, next) {
       .populate({ path: "test", select: "title testType level subject", populate: { path: "subject", select: "name slug" } })
       .sort({ createdAt: -1 })
       .limit(50);
-    res.json({ success: true, data: attempts });
+    const total = await TestAttempt.countDocuments(filter);
+    res.json({ success: true, data: attempts, total });
   } catch (err) {
     next(err);
   }

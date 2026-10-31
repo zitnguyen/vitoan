@@ -52,6 +52,7 @@ export const Gift = make3D("gift", "Gift");
 export const Gem = make3D("gem", "Gem");
 export const Flame = make3D("fire", "Flame");
 export const Target = make3D("target", "Target");
+export const Gamepad2 = make3D("game", "Gamepad2");
 export const Store = make3D("shop", "Store");
 export const Shirt = make3D("shirt", "Shirt");
 

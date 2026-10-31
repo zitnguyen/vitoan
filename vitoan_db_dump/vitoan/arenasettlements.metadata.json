@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"weekKey":{"$numberInt":"1"}},"name":"weekKey_1","unique":true}],"uuid":"512c09167ec143539c6126df06e9a92d","collectionName":"arenasettlements","type":"collection"}

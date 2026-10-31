@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
+const Grade = require("../models/Grade");
 const VerificationCode = require("../models/VerificationCode");
 const { generateAccessToken, generateRefreshToken, setRefreshCookie } = require("../utils/tokens");
 const { sendMailIfConfigured, buildOtpEmailHtml } = require("../services/emailService");
@@ -25,6 +26,8 @@ function toPublicUser(user) {
     equippedTitle: user.equippedTitle || "",
     nameColor: user.nameColor || "",
     vipUntil: user.vipUntil || null,
+    dailyGoal: user.dailyGoal || 3,
+    onboarded: !!user.onboarded,
   };
 }
 
@@ -247,10 +250,19 @@ async function googleAuth(req, res, next) {
         avatarUrl: payload.picture,
         role: "Student",
       });
-    } else if (!user.googleId) {
-      user.googleId = payload.sub;
-      if (!user.avatarUrl) user.avatarUrl = payload.picture;
-      await user.save();
+    } else {
+      let changed = false;
+      if (!user.googleId) {
+        user.googleId = payload.sub;
+        changed = true;
+      }
+      // Ảnh Gmail: dùng khi em chưa tự chọn ảnh/cú khác; đăng nhập lần sau thì cập nhật nếu Google đổi ảnh.
+      const usingGoogleOrNone = !user.avatarUrl || /googleusercontent\.com/.test(user.avatarUrl);
+      if (payload.picture && usingGoogleOrNone && user.avatarUrl !== payload.picture) {
+        user.avatarUrl = payload.picture;
+        changed = true;
+      }
+      if (changed) await user.save();
     }
 
     if (!user.isActive) {
@@ -368,7 +380,34 @@ async function setGrade(req, res, next) {
     if (!grade) {
       return res.status(400).json({ success: false, message: "Vui lòng chọn lớp" });
     }
+    const target = await Grade.findById(grade).select("isPublished");
+    if (!target || target.isPublished === false) {
+      return res.status(400).json({ success: false, message: "Lớp này chưa mở, em chọn lớp khác nhé" });
+    }
     req.user.grade = grade;
+    await req.user.save();
+    await req.user.populate("grade");
+    res.json({ success: true, data: { user: toPublicUser(req.user) } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function updatePreferences(req, res, next) {
+  try {
+    const { dailyGoal, onboarded } = req.body;
+    if (dailyGoal !== undefined) {
+      const g = Number(dailyGoal);
+      if (!Number.isInteger(g) || g < 1 || g > 10) return res.status(400).json({ success: false, message: "Mục tiêu mỗi ngày từ 1 đến 10 bài" });
+      req.user.dailyGoal = g;
+    }
+    if (onboarded !== undefined) req.user.onboarded = !!onboarded;
+    // Chọn cú đại diện: "owl:0".."owl:7"; chuỗi rỗng = quay về cú tự gán theo tài khoản.
+    if (req.body.avatarUrl !== undefined) {
+      const a = String(req.body.avatarUrl);
+      if (a !== "" && !/^owl:[0-7]$/.test(a)) return res.status(400).json({ success: false, message: "Kiểu cú không hợp lệ" });
+      req.user.avatarUrl = a || undefined;
+    }
     await req.user.save();
     await req.user.populate("grade");
     res.json({ success: true, data: { user: toPublicUser(req.user) } });
@@ -484,6 +523,7 @@ module.exports = {
   resetPassword,
   setGrade,
   updateProfile,
+  updatePreferences,
   uploadAvatar,
   changePassword,
   refresh,

@@ -1,7 +1,6 @@
 // Hình minh hoạ 3D: bộ Microsoft Fluent Emoji (giấy phép MIT — https://github.com/microsoft/fluentui-emoji).
-// Đang nạp qua CDN jsDelivr. Muốn chạy không cần mạng (demo bảo vệ): tải các file về public/3d/
-// rồi đổi ICON_BASE thành "/3d" — giữ nguyên tên file.
-const ICON_BASE = "https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets";
+// Đã tải sẵn về public/3d/ (giữ nguyên tên thư mục/tệp của bộ gốc) nên chạy được khi không có mạng.
+const ICON_BASE = `${import.meta.env.BASE_URL}3d`.replace(/\/\/+/g, "/");
 
 const FILES = {
   trophy: "Trophy/3D/trophy_3d.png",

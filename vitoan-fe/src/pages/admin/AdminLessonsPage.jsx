@@ -229,7 +229,7 @@ export default function AdminLessonsPage() {
   const missingCount = lessons.filter(isLessonMissing).length;
 
   return (
-    <AdminPage title="Chương trình học" subtitle="Chọn Môn → Lớp → Chủ đề, rồi bấm vào một bài học để soạn lý thuyết, video, câu hỏi và bài luyện tập.">
+    <AdminPage title="Bài học & chủ đề" subtitle="Chọn Môn → Lớp → Chủ đề, rồi bấm vào một bài học để soạn lý thuyết, video, câu hỏi và bài luyện tập.">
       <Card className="space-y-2.5 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <span className="w-12 shrink-0 font-bold text-slate-400">Môn</span>
@@ -243,7 +243,7 @@ export default function AdminLessonsPage() {
 
       {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 font-semibold text-red-600">{error}</p>}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[380px_1fr]">
+      <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         {/* ── Chủ đề ── */}
         <Card className="p-3 lg:self-start">
           <div className="flex items-center justify-between px-1">
@@ -295,7 +295,7 @@ export default function AdminLessonsPage() {
             </form>
           )}
 
-          <div className="mt-2 max-h-[70vh] space-y-3 overflow-y-auto pr-1">
+          <div className="mt-2 space-y-3">
             {[1, 2].map((sem) => {
               const list = chapters.filter((c) => (c.semester || 1) === sem);
               if (list.length === 0) return null;

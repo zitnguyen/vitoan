@@ -9,6 +9,7 @@ import {
   attemptService,
   missionService,
   userService,
+  reviewSessionService,
   badgeService,
 } from "../../api/services";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -17,7 +18,10 @@ import { cn } from "../../lib/utils";
 import { Img3D } from "../../lib/icons3d.jsx";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
 import UserAvatar from "../../components/common/UserAvatar.jsx";
+import UserName from "../../components/common/UserName.jsx";
+import OnboardingModal from "../../components/onboarding/OnboardingModal.jsx";
 import GuestLanding from "./GuestLanding.jsx";
+import { currentSemester, SEMESTER_RANGE } from "../../lib/semester.js";
 import CheckInCard from "../../components/missions/CheckInCard.jsx";
 
 // Trang chủ sau khi đăng nhập — "bảng điều khiển" cho bé (tham khảo Duolingo / VioEdu):
@@ -26,7 +30,7 @@ import CheckInCard from "../../components/missions/CheckInCard.jsx";
 
 const NAVY = "#0b2340";
 const CARD = "rounded-[1.75rem] bg-white shadow-[0_14px_40px_-18px_rgba(11,35,64,0.28)]";
-const DAILY_GOAL = 3; // số lượt luyện tập mỗi ngày
+const GOAL_CHOICES = [{ n: 3, label: "Nhẹ nhàng" }, { n: 5, label: "Đều đặn" }, { n: 10, label: "Thử thách" }];
 
 const SUBJECT_UI = {
   toan: { icon: "numbers", grad: "from-sky-400 to-blue-500", soft: "bg-sky-50", ring: "ring-sky-200", text: "text-sky-600" },
@@ -54,7 +58,7 @@ function GoalRing({ value, goal }) {
   const r = 34;
   const c = 2 * Math.PI * r;
   return (
-    <div className="relative h-24 w-24 shrink-0">
+    <div className="relative h-16 w-16 shrink-0">
       <svg viewBox="0 0 80 80" className="h-full w-full -rotate-90">
         <circle cx="40" cy="40" r={r} stroke="#e2e8f0" strokeWidth="9" fill="none" />
         <circle cx="40" cy="40" r={r} stroke="url(#goalGrad)" strokeWidth="9" fill="none" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct)} className="transition-[stroke-dashoffset] duration-700" />
@@ -66,7 +70,7 @@ function GoalRing({ value, goal }) {
         </defs>
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        {pct >= 1 ? <Img3D name="check" className="h-9 w-9" /> : <span className="font-display text-2xl font-black" style={{ color: NAVY }}>{value}/{goal}</span>}
+        {pct >= 1 ? <Img3D name="check" className="h-7 w-7" /> : <span className="font-display text-lg font-black" style={{ color: NAVY }}>{value}/{goal}</span>}
       </div>
     </div>
   );
@@ -74,6 +78,9 @@ function GoalRing({ value, goal }) {
 
 // ---------- 1. Lời chào ----------
 function Hero({ user, stats }) {
+  const { updatePreferences } = useAuth();
+  const [goalOpen, setGoalOpen] = useState(false);
+  const DAILY_GOAL = user.dailyGoal || 3; // số lượt luyện tập mỗi ngày (em tự chọn)
   const firstName = user.fullName?.split(" ").pop() || user.username;
   const h = new Date().getHours();
   const hi = h < 11 ? "Chào buổi sáng" : h < 14 ? "Chào buổi trưa" : h < 18 ? "Chào buổi chiều" : "Chào buổi tối";
@@ -84,7 +91,7 @@ function Hero({ user, stats }) {
       ? "Em đã hoàn thành mục tiêu hôm nay rồi, giỏi quá! 🎉"
       : streak >= 2
       ? `Em đã học ${streak} ngày liên tiếp — giữ lửa nhé!`
-      : "Mỗi ngày 3 bài luyện tập nhỏ, em sẽ tiến bộ rất nhanh!";
+      : `Mỗi ngày ${DAILY_GOAL} bài luyện tập nhỏ, em sẽ tiến bộ rất nhanh!`;
 
   return (
     <section className="relative overflow-clip rounded-[2.25rem] px-5 py-6 sm:px-8" style={{ background: "linear-gradient(120deg,#c9ecff 0%,#e7dcff 55%,#ffe1f0 100%)" }}>
@@ -99,23 +106,72 @@ function Hero({ user, stats }) {
               {firstName} ơi! 👋
             </h1>
             <p className="mt-2 max-w-md font-semibold text-slate-600">{say}</p>
+            {/* Diện mạo đang dùng (quà đã đổi) */}
+            <Link
+              to="/doi-qua"
+              title="Đổi khung, màu tên, danh hiệu ở trang Đổi quà"
+              className="mt-3 inline-flex max-w-full items-center gap-2.5 rounded-full bg-white/85 py-1.5 pl-1.5 pr-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-white active:scale-95"
+            >
+              <UserAvatar user={user} size="h-9 w-9" decoSize="text-xs" />
+              <span className="min-w-0">
+                <UserName user={user} className="text-sm" />
+              </span>
+            </Link>
           </div>
         </div>
 
-        <div className="grid w-full grid-cols-3 gap-3 lg:w-auto">
-          <div className="flex flex-col items-center justify-center rounded-3xl bg-white/80 px-4 py-3 backdrop-blur">
-            <Img3D name="fire" className="h-10 w-10" />
+        <div className="grid w-full grid-cols-3 items-stretch gap-3 lg:w-auto">
+          <div className="flex min-w-[6.5rem] flex-col items-center justify-center rounded-3xl bg-white/80 px-4 py-3 backdrop-blur">
+            <Img3D name="fire" className="h-16 w-16" />
             <p className="mt-1 font-display text-2xl font-black text-orange-500">{streak}</p>
             <p className="text-xs font-bold text-slate-500">ngày liên tiếp</p>
           </div>
-          <div className="flex flex-col items-center justify-center rounded-3xl bg-white/80 px-4 py-3 backdrop-blur">
-            <Img3D name="gem" className="h-10 w-10" />
+          <div className="flex min-w-[6.5rem] flex-col items-center justify-center rounded-3xl bg-white/80 px-4 py-3 backdrop-blur">
+            <Img3D name="gem" className="h-16 w-16" />
             <p className="mt-1 font-display text-2xl font-black text-sky-500">{(user.points ?? 0).toLocaleString("vi-VN")}</p>
             <p className="text-xs font-bold text-slate-500">điểm thưởng</p>
           </div>
-          <div className="flex flex-col items-center justify-center rounded-3xl bg-white/80 px-3 py-2 backdrop-blur">
-            <GoalRing value={Math.min(today, DAILY_GOAL)} goal={DAILY_GOAL} />
-            <p className="text-xs font-bold text-slate-500">mục tiêu hôm nay</p>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setGoalOpen((o) => !o)}
+              title="Bấm để xem mục tiêu hôm nay"
+              className="flex h-full w-full min-w-[6.5rem] flex-col items-center justify-center rounded-3xl bg-white/80 px-4 py-3 backdrop-blur transition hover:bg-white active:scale-95"
+            >
+              <GoalRing value={Math.min(today, DAILY_GOAL)} goal={DAILY_GOAL} />
+              <p className="mt-1 text-xs font-bold text-slate-500">mục tiêu hôm nay</p>
+            </button>
+            {goalOpen && (
+              <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-2xl bg-white p-4 text-left shadow-[0_20px_50px_-20px_rgba(11,35,64,0.5)]">
+                <p className="flex items-center gap-2 font-display font-black" style={{ color: NAVY }}>
+                  <Img3D name="target" className="h-6 w-6" /> Mục tiêu hôm nay
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-600">
+                  Hoàn thành <b>{DAILY_GOAL} lượt luyện tập</b> trong ngày. Em đã làm được{" "}
+                  <b>
+                    {Math.min(today, DAILY_GOAL)}/{DAILY_GOAL}
+                  </b>
+                  {today >= DAILY_GOAL ? " — xong rồi, giỏi quá! 🎉" : `, còn ${DAILY_GOAL - today} lượt nữa.`}
+                </p>
+                <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-400">Đổi mục tiêu mỗi ngày</p>
+                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                  {GOAL_CHOICES.map((g) => (
+                    <button
+                      key={g.n}
+                      type="button"
+                      onClick={() => updatePreferences({ dailyGoal: g.n }).catch(() => {})}
+                      className={cn("rounded-xl px-1 py-1.5 text-center transition", DAILY_GOAL === g.n ? "bg-primary text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
+                    >
+                      <span className="block font-display text-lg font-black leading-none">{g.n}</span>
+                      <span className="block text-[11px] font-bold">{g.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <Link to="/nhiem-vu" className="mt-3 block rounded-xl bg-primary py-1.5 text-center text-sm font-black text-white">
+                  Xem nhiệm vụ &amp; điểm thưởng
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -136,6 +192,7 @@ function ContinueCard({ item, fallbackTo }) {
       <div className="relative min-w-0 flex-1">
         <p className="text-sm font-black uppercase tracking-wide text-white/80">{item ? item.sub : "Bắt đầu hành trình"}</p>
         <p className="truncate font-display text-xl font-black sm:text-2xl">{item ? item.title : "Chọn chủ đề đầu tiên và học ngay!"}</p>
+        {item?.context && <p className="truncate text-sm font-bold text-white/90">{item.context}</p>}
         {item?.total > 0 && (
           <div className="mt-2 h-2.5 w-full max-w-sm overflow-clip rounded-full bg-white/30">
             <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
@@ -145,6 +202,22 @@ function ContinueCard({ item, fallbackTo }) {
       <span className="relative hidden shrink-0 items-center gap-2 rounded-full bg-white px-5 py-2.5 font-black text-primary shadow sm:flex">
         <Play className="h-4 w-4 fill-current" /> {item ? "Học tiếp" : "Bắt đầu"}
       </span>
+    </Link>
+  );
+}
+
+// ---------- Ôn lại câu sai (lặp lại ngắt quãng) ----------
+function ReviewCard({ due }) {
+  if (!due) return null;
+  return (
+    <Link to="/on-lai-cau-sai" className="group flex items-center gap-4 rounded-[1.75rem] bg-gradient-to-r from-violet-500 to-fuchsia-500 p-5 text-white shadow-[0_16px_36px_-16px_rgba(139,92,246,0.7)] transition hover:-translate-y-0.5">
+      <Img3D name="brain" className="h-14 w-14 shrink-0 transition group-hover:scale-110 sm:h-16 sm:w-16" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-black uppercase tracking-wide text-white/80">Ôn thông minh · 5 phút</p>
+        <p className="font-display text-xl font-black sm:text-2xl">Em có {due} câu cần ôn lại</p>
+        <p className="text-sm font-semibold text-white/85">Ôn đúng những câu hay sai để nhớ chắc hơn</p>
+      </div>
+      <span className="hidden shrink-0 rounded-full bg-white px-5 py-2.5 font-black text-violet-600 shadow sm:block">Ôn ngay</span>
     </Link>
   );
 }
@@ -199,7 +272,7 @@ function useIsNarrow() {
 const DECOR = ["sunflower", "star", "books", "blossom", "pencil", "glowStar", "ruler", "puzzle"];
 const MAP_TOP = 96; // chừa chỗ cho cú đứng trên trạm đầu
 
-function AdventureMap({ user, subjects: rawSubjects }) {
+function AdventureMap({ user, subjects: rawSubjects, onCurrent }) {
   const subjects = useMemo(() => [...rawSubjects].sort((a, b) => (a.slug === "toan" ? -1 : b.slug === "toan" ? 1 : 0)), [rawSubjects]);
   const [subjectSlug, setSubjectSlug] = useState(subjects[0]?.slug || "toan");
   const [data, setData] = useState(null);
@@ -225,9 +298,13 @@ function AdventureMap({ user, subjects: rawSubjects }) {
           return { ...c, total: lessons.length || c.lessonCount || 0, completed };
         });
         setData(nodes);
-        // mặc định mở học kỳ có chủ đề đang học dở
+        // báo lên trang chủ chủ đề đang học dở để thẻ "Học tiếp" gợi ý đúng chỗ
+        const next = nodes.find((n) => n.total > 0 && n.completed < n.total);
+        if (next) onCurrent?.({ title: next.title, subject: subject.name, completed: next.completed, total: next.total, to: `/lop/${user.grade.slug}/${subject.slug}?chu-de=${next._id}` });
+        // mặc định mở học kỳ theo thời gian thực tế (HK1 T9–T1, HK2 T2–T5); lớp chưa có thì lấy học kỳ có chủ đề đang học dở
+        const now = currentSemester();
         const cur = nodes.find((n) => n.completed < n.total);
-        setSemester((cur || nodes[0])?.semester || 1);
+        setSemester(nodes.some((n) => (n.semester || 1) === now) ? now : (cur || nodes[0])?.semester || 1);
       })
       .catch(() => !cancelled && setData([]));
     return () => {
@@ -287,11 +364,14 @@ function AdventureMap({ user, subjects: rawSubjects }) {
                 onClick={() => setSemester(s)}
                 className={cn("rounded-full px-4 py-1.5 text-sm font-black transition", s === semester ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:text-slate-800")}
               >
-                Học kỳ {s}
+                Học kỳ {s} <span className="text-xs font-bold opacity-70">({SEMESTER_RANGE[s]}{currentSemester() === s ? " · hiện tại" : ""})</span>
               </button>
             ))}
           </div>
         )}
+        <p className="mt-3 text-sm font-semibold text-slate-400">
+          Học lần lượt theo bản đồ (có “Học tiếp nè!” gợi ý) hoặc bấm chủ đề bất kỳ để học — cùng một danh sách bài với mục Vào học.
+        </p>
         <div className={cn("relative mt-4 overflow-clip rounded-[1.5rem] px-2", ui.soft)} style={{ height: mapH }}>
           {/* đường đi chấm nối các trạm */}
           <svg aria-hidden className="absolute inset-0 h-full w-full" viewBox={`0 0 100 ${mapH}`} preserveAspectRatio="none">
@@ -333,7 +413,7 @@ function AdventureMap({ user, subjects: rawSubjects }) {
                     )}
                   >
                     {isCurrent && <span className="absolute inset-0 animate-ping rounded-full bg-white/30" />}
-                    {isDone ? <Img3D name="check" className="h-9 w-9" /> : n.idx + 1}
+                    {isDone ? <Img3D name="check" className="h-9 w-9" /> : i + 1}
                   </span>
                   <span
                     className={cn(
@@ -470,9 +550,8 @@ function ClassRank({ rows }) {
             <div key={r._id} className={cn("flex items-center gap-3 rounded-2xl px-3 py-2", PODIUM_BG[i], r.isMe && "ring-2 ring-primary")}>
               <span className="w-5 text-center font-display text-lg font-black text-slate-500">{r.rank}</span>
               <UserAvatar user={r} size="h-9 w-9" />
-              <span className="min-w-0 flex-1 truncate text-sm font-black" style={{ color: NAVY }}>
-                {r.fullName}
-                {r.isMe && " (em)"}
+              <span className="min-w-0 flex-1">
+                <UserName user={r} name={`${r.fullName}${r.isMe ? " (em)" : ""}`} className="text-sm" showTitle={false} />
               </span>
               <span className="text-sm font-black text-primary">{r.score}</span>
             </div>
@@ -522,9 +601,12 @@ function StudentHome({ user }) {
   const [rank, setRank] = useState(null);
   const [badges, setBadges] = useState({ earned: 0, total: 0 });
   const [continueItem, setContinueItem] = useState(null);
+  const [suggest, setSuggest] = useState(null);
+  const [reviewDue, setReviewDue] = useState(0);
 
   useEffect(() => {
     subjectService.list().then((r) => setSubjects(r.data)).catch(() => {});
+    reviewSessionService.summary().then((r) => setReviewDue(r.data.due)).catch(() => {});
     attemptService.stats().then((r) => setStats(r.data)).catch(() => setStats({}));
     missionService.list().then((r) => setMissions(r.data)).catch(() => setMissions([]));
     userService.leaderboard(1).then((r) => setRank(r.data)).catch(() => setRank([]));
@@ -539,6 +621,7 @@ function StudentHome({ user }) {
           setContinueItem({
             title: p.lesson.title,
             sub: `Đang làm dở ${p.answered}/${p.total} câu`,
+            context: [p.lesson.subject?.name, p.lesson.chapter?.title].filter(Boolean).join(" · "),
             answered: p.answered,
             total: p.total,
             to: p.practiceSet ? `/luyen-tap/${p.practiceSet._id}` : `/bai/${p.lesson._id}/luyen-tap`,
@@ -551,12 +634,27 @@ function StudentHome({ user }) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 pb-16 pt-6 sm:px-6 xl:max-w-none xl:px-10 2xl:px-16">
+      {!user.onboarded && <OnboardingModal />}
       <Hero user={user} stats={stats} />
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
-          <ContinueCard item={continueItem} fallbackTo={fallbackTo} />
+          <ContinueCard
+            item={
+              continueItem ||
+              (suggest && {
+                title: suggest.title,
+                sub: `Chủ đề tiếp theo · ${suggest.subject}`,
+                context: `Đã học xong ${suggest.completed}/${suggest.total} bài`,
+                answered: suggest.completed,
+                total: suggest.total,
+                to: suggest.to,
+              })
+            }
+            fallbackTo={fallbackTo}
+          />
+          <ReviewCard due={reviewDue} />
           <QuickTiles gradeSlug={user.grade?.slug} />
-          {user.grade && subjects.length > 0 && <AdventureMap user={user} subjects={subjects} />}
+          {user.grade && subjects.length > 0 && <AdventureMap user={user} subjects={subjects} onCurrent={(x) => setSuggest((p) => p || x)} />}
           {!user.grade && (
             <Link to="/chon-lop" className={cn(CARD, "block p-6 text-center font-black text-primary")}>
               Chọn lớp của em để bắt đầu học →

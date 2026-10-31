@@ -1,63 +1,40 @@
 import { createContext, useCallback, useContext, useRef, useState } from "react";
-import { CheckCircle2, XCircle, Info, X } from "../components/ui/icons.jsx";
+import { Check, X, Info, AlertTriangle } from "lucide-react";
 import { cn } from "../lib/utils";
 
 const ToastContext = createContext(null);
 
+// Thông báo nổi: thẻ trắng gọn, chấm tròn màu có icon nét trắng, thanh thời gian mảnh ở đáy.
 const VARIANTS = {
-  success: {
-    Icon: CheckCircle2,
-    iconClass: "text-white bg-primary",
-    barClass: "bg-primary",
-    ring: "ring-primary/15",
-  },
-  error: {
-    Icon: XCircle,
-    iconClass: "text-white bg-red-500",
-    barClass: "bg-red-500",
-    ring: "ring-red-500/15",
-  },
-  info: {
-    Icon: Info,
-    iconClass: "text-white bg-secondary",
-    barClass: "bg-secondary",
-    ring: "ring-secondary/15",
-  },
+  success: { Icon: Check, dot: "bg-gradient-to-br from-emerald-400 to-green-500 shadow-[0_6px_14px_-4px_rgba(22,163,74,0.6)]", bar: "bg-green-500" },
+  error: { Icon: AlertTriangle, dot: "bg-gradient-to-br from-rose-400 to-red-500 shadow-[0_6px_14px_-4px_rgba(239,68,68,0.6)]", bar: "bg-red-500" },
+  info: { Icon: Info, dot: "bg-gradient-to-br from-sky-400 to-blue-500 shadow-[0_6px_14px_-4px_rgba(59,130,246,0.6)]", bar: "bg-sky-500" },
 };
 
 function ToastItem({ toast: t, onDismiss }) {
   const v = VARIANTS[t.variant] || VARIANTS.info;
   return (
-    <div
-      className={cn(
-        "animate-toast-in pointer-events-auto relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-elevation-4 ring-1",
-        v.ring
-      )}
-    >
-      <div className="flex items-start gap-3.5 p-4 pr-3 sm:p-5 sm:pr-4">
-        <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm", v.iconClass)}>
-          <v.Icon className="h-6 w-6" strokeWidth={2} />
+    <div className="animate-toast-in pointer-events-auto relative w-full max-w-sm overflow-hidden rounded-2xl bg-white/95 shadow-[0_18px_40px_-14px_rgba(11,35,64,0.35)] ring-1 ring-slate-900/5 backdrop-blur">
+      <div className="flex items-center gap-3 py-3 pl-3.5 pr-2.5">
+        <span className={cn("toast-dot flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white", v.dot)}>
+          <v.Icon className="h-5 w-5" strokeWidth={3} />
         </span>
-        <div className="min-w-0 flex-1 pt-0.5">
-          {t.title && (
-            <p className="font-display text-base font-bold leading-snug text-slate-800">{t.title}</p>
-          )}
-          <p className={cn("leading-snug text-slate-600", t.title ? "mt-0.5 text-sm" : "text-base font-semibold text-slate-800")}>
-            {t.message}
-          </p>
+        <div className="min-w-0 flex-1">
+          {t.title && <p className="font-display text-[15px] font-black leading-snug text-[#0b2340]">{t.title}</p>}
+          <p className={cn("leading-snug", t.title ? "text-sm font-semibold text-slate-500" : "font-bold text-[#0b2340]")}>{t.message}</p>
         </div>
         <button
           type="button"
           onClick={() => onDismiss(t.id)}
-          className="shrink-0 rounded-lg p-1.5 text-slate-300 transition hover:bg-slate-100 hover:text-slate-500"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-300 transition hover:bg-slate-100 hover:text-slate-500 active:scale-90"
           aria-label="Đóng thông báo"
         >
-          <X className="h-4 w-4" />
+          <X className="h-4 w-4" strokeWidth={2.5} />
         </button>
       </div>
       {t.duration > 0 && (
-        <div className="h-1 w-full bg-slate-100">
-          <div className={cn("h-full animate-toast-progress", v.barClass)} style={{ animationDuration: `${t.duration}ms` }} />
+        <div className="absolute inset-x-3 bottom-0 h-[3px] overflow-hidden rounded-full">
+          <div className={cn("h-full rounded-full opacity-70 animate-toast-progress", v.bar)} style={{ animationDuration: `${t.duration}ms` }} />
         </div>
       )}
     </div>

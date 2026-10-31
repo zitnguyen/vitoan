@@ -26,7 +26,7 @@ export default function GradeSubjectsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex min-h-[70vh] items-center justify-center">
         <Spinner />
       </div>
     );

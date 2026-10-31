@@ -1,40 +1,84 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { Check } from "lucide-react";
 import { checkinService } from "../../api/services";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import { cn } from "../../lib/utils";
 import { Img3D } from "../../lib/icons3d.jsx";
 import { Confetti } from "../landing/LandingFx.jsx";
-import OwlMascot from "../illustrations/OwlMascot.jsx";
 import Spinner from "../ui/Spinner.jsx";
 
-// Điểm danh hằng ngày: vòng 7 ngày, thưởng tăng dần, ngày 7 là hộp quà lớn.
-// compact = bản gọn cho trang chủ. onCheckedIn: gọi lại sau khi điểm danh (để tải lại nhiệm vụ…).
+// Điểm danh hằng ngày kiểu "nhận quà mỗi ngày": 7 ô quà trên một thanh tiến độ, thưởng tăng dần,
+// ngày 7 là hộp quà lớn. compact = bản gọn cho trang chủ. onCheckedIn: gọi lại sau khi điểm danh.
 
+// Màn nhận thưởng: món quà phóng to giữa vầng sáng xoay nhẹ
 function Celebration({ reward, onClose }) {
   if (!reward) return null;
-  // Gắn thẳng vào <body>: nếu nằm trong thẻ (overflow-clip) thì pháo giấy làm thẻ bị cuộn lệch
+  const big = reward.streak % 7 === 0;
+  // Gắn thẳng vào <body> để không bị khung thẻ cắt / cuộn lệch
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#0b2340]/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative w-full max-w-sm animate-pop-in rounded-[2rem] bg-white px-6 pb-7 pt-8 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <Confetti burst={reward.key} count={42} />
-        <OwlMascot className="mx-auto h-28 w-28" />
-        <p className="mt-2 font-display text-2xl font-black text-[#0b2340]">{reward.streak > 1 ? `${reward.streak} ngày liên tiếp!` : "Điểm danh thành công!"}</p>
-        <p className="mt-3 flex items-center justify-center gap-2 font-display text-5xl font-black text-sky-500">
-          +{reward.points} <Img3D name="gem" className="h-12 w-12" />
-        </p>
-        <p className="mt-3 font-semibold text-slate-500">{reward.streak % 7 === 0 ? "Em đã mở hộp quà lớn ngày 7! Siêu quá!" : "Mai nhớ quay lại để giữ chuỗi và nhận nhiều quà hơn nhé!"}</p>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#0b2340]/55 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative w-full max-w-sm animate-pop-in overflow-clip rounded-[2rem] bg-white px-6 pb-7 pt-10 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <Confetti burst={reward.key} count={18} />
+        <div className="relative mx-auto flex h-36 w-36 items-center justify-center">
+          <span
+            aria-hidden
+            className="absolute inset-0 animate-[spin_12s_linear_infinite] rounded-full opacity-70"
+            style={{ background: "repeating-conic-gradient(#fde68a 0deg 12deg, transparent 12deg 30deg)", WebkitMaskImage: "radial-gradient(circle, #000 35%, transparent 70%)", maskImage: "radial-gradient(circle, #000 35%, transparent 70%)" }}
+          />
+          <Img3D name={big ? "gift" : "gem"} className="relative h-24 w-24 drop-shadow-[0_12px_16px_rgba(11,35,64,0.25)]" />
+        </div>
+        <p className="mt-1 text-sm font-black uppercase tracking-wider text-amber-500">{big ? "Hộp quà ngày 7" : `Ngày ${((reward.streak - 1) % 7) + 1}`}</p>
+        <p className="mt-1 font-display text-5xl font-black text-[#0b2340]">+{reward.points}</p>
+        <p className="mt-1 font-bold text-slate-500">điểm thưởng đã vào túi của em</p>
+        {reward.streak > 1 && (
+          <p className="mx-auto mt-4 flex w-fit items-center gap-1.5 rounded-full bg-orange-50 px-4 py-1.5 text-sm font-black text-orange-500">
+            <Img3D name="fire" className="h-5 w-5" /> {reward.streak} ngày liên tiếp
+          </p>
+        )}
         <button
           type="button"
           onClick={onClose}
-          className="mt-6 w-full rounded-full bg-primary py-3 font-display text-lg font-black text-white shadow-[0_5px_0_0_#049245] transition hover:-translate-y-0.5"
+          className="mt-6 w-full rounded-full bg-primary py-3 font-display text-lg font-black text-white shadow-[0_4px_0_0_#049245] transition hover:-translate-y-0.5"
         >
-          Tuyệt vời!
+          Nhận quà
         </button>
       </div>
     </div>,
     document.body
+  );
+}
+
+// Một ô quà trong vòng 7 ngày
+function DayTile({ day, points, state, compact }) {
+  const big = day === 7;
+  return (
+    <div className="relative flex flex-col items-center">
+      <div
+        className={cn(
+          "relative flex w-full flex-col items-center justify-center rounded-2xl transition",
+          compact ? "h-[4.6rem]" : "h-24",
+          state === "done" && "bg-gradient-to-b from-emerald-400 to-green-500 text-white shadow-[0_6px_14px_-6px_rgba(22,163,74,0.7)]",
+          state === "today" && "bg-white ring-[3px] ring-amber-400 shadow-[0_0_0_6px_rgba(251,191,36,0.18),0_10px_22px_-8px_rgba(245,158,11,0.55)]",
+          state === "future" && (big ? "bg-gradient-to-b from-fuchsia-50 to-pink-100" : "bg-slate-50")
+        )}
+      >
+        {state === "done" ? (
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25">
+            <Check className="h-5 w-5" strokeWidth={3.5} />
+          </span>
+        ) : (
+          <Img3D name={big ? "gift" : "gem"} className={cn(big ? (compact ? "h-9 w-9" : "h-11 w-11") : compact ? "h-7 w-7" : "h-8 w-8", state === "future" && !big && "opacity-60")} />
+        )}
+        <span className={cn("mt-1 font-display font-black", compact ? "text-xs" : "text-sm", state === "done" ? "text-white" : big ? "text-fuchsia-600" : state === "today" ? "text-amber-600" : "text-slate-500")}>
+          +{points}
+        </span>
+      </div>
+      <span className={cn("mt-1.5 text-xs font-black sm:text-xs", state === "today" ? "text-amber-600" : state === "done" ? "text-green-600" : "text-slate-400")}>
+        {state === "today" ? "Hôm nay" : `Ngày ${day}`}
+      </span>
+    </div>
   );
 }
 
@@ -76,79 +120,53 @@ export default function CheckInCard({ compact = false, onCheckedIn }) {
     );
   }
 
-  // Vị trí hôm nay trong vòng 7 ngày; chưa điểm danh thì hôm nay là ngày sắp mở
-  const today = st.cycleDay;
-  const button = st.checkedToday ? (
-    <span className="flex items-center justify-center gap-2 rounded-full bg-green-100 px-6 py-3 font-black text-green-700">
-      <Img3D name="check" className="h-6 w-6" /> Đã điểm danh — mai quay lại nhé!
-    </span>
-  ) : (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={handleCheckIn}
-      className="btn-shine flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-7 py-3 font-display text-lg font-black text-white shadow-[0_5px_0_0_#c2410c] transition hover:-translate-y-0.5 disabled:opacity-60"
-    >
-      {busy ? "Đang điểm danh..." : <>Điểm danh nhận +{st.todayReward} <Img3D name="gem" className="h-6 w-6" /></>}
-    </button>
-  );
+  const today = st.cycleDay; // vị trí hôm nay trong vòng 7 ngày
+  const doneCount = st.checkedToday ? today : today - 1;
+  const stateOf = (day) => (day <= doneCount ? "done" : day === today && !st.checkedToday ? "today" : "future");
 
   return (
-    <section className={cn("relative overflow-clip rounded-[2rem] shadow-elevation-2", compact ? "p-5" : "p-6 sm:p-7")} style={{ background: "linear-gradient(120deg,#fff4d1 0%,#ffe6cf 50%,#ffe0ec 100%)" }}>
-      <div aria-hidden className="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rounded-full bg-white/50 blur-2xl" />
-      <div className="relative flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Img3D name="calendar" className={compact ? "h-12 w-12" : "h-14 w-14"} />
-          <div>
-            <h2 className={cn("font-display font-black text-[#0b2340]", compact ? "text-xl" : "text-2xl")}>Điểm danh hằng ngày</h2>
-            <p className="text-sm font-bold text-slate-500">Điểm danh liên tiếp để nhận quà to hơn mỗi ngày!</p>
-          </div>
+    <section className={cn("rounded-[1.75rem] bg-white shadow-elevation-2", compact ? "p-5" : "p-6 sm:p-7")}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className={cn("font-display font-black text-[#0b2340]", compact ? "text-xl" : "text-2xl")}>Điểm danh nhận quà</h2>
+          <p className="mt-0.5 text-sm font-semibold text-slate-500">Vào học mỗi ngày — ngày thứ 7 liên tiếp nhận hộp quà lớn!</p>
         </div>
-        <div className="flex gap-2">
-          <span className="flex items-center gap-1.5 rounded-full bg-white/85 px-3.5 py-1.5 font-black text-orange-500 shadow-sm">
-            <Img3D name="fire" className="h-6 w-6" /> {st.streak} ngày liên tiếp
-          </span>
-          {!compact && (
-            <span className="hidden items-center gap-1.5 rounded-full bg-white/85 px-3.5 py-1.5 font-black text-amber-600 shadow-sm sm:flex">
-              <Img3D name="trophy" className="h-5 w-5" /> Kỷ lục {st.bestStreak}
-            </span>
-          )}
+        <span className="flex items-center gap-1.5 rounded-full bg-orange-50 px-3.5 py-1.5 text-sm font-black text-orange-500">
+          <Img3D name="fire" className="h-5 w-5" /> {st.activeStreak ?? st.streak} ngày liên tiếp
+        </span>
+      </div>
+
+      {/* 7 ô quà trên một thanh tiến độ */}
+      <div className="relative mt-5">
+        <div aria-hidden className={cn("absolute inset-x-[7%] h-1.5 rounded-full bg-slate-100", compact ? "top-[2.3rem]" : "top-12")}>
+          <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500 transition-all duration-700" style={{ width: `${(Math.max(0, doneCount - 1) / 6) * 100}%` }} />
+        </div>
+        <div className={cn("relative grid grid-cols-7", compact ? "gap-1.5" : "gap-2 sm:gap-3")}>
+          {st.rewards.map((pts, i) => (
+            <DayTile key={i} day={i + 1} points={pts} state={stateOf(i + 1)} compact={compact} />
+          ))}
         </div>
       </div>
 
-      {/* Dải 7 ngày */}
-      <div className="relative mt-5 grid grid-cols-7 gap-1.5 sm:gap-3">
-        {st.rewards.map((pts, i) => {
-          const day = i + 1;
-          const done = day < today || (day === today && st.checkedToday);
-          const isToday = day === today && !st.checkedToday;
-          const big = day === 7;
-          return (
-            <div
-              key={day}
-              className={cn(
-                "relative flex flex-col items-center rounded-2xl px-1 py-2.5 text-center transition sm:py-3",
-                done ? "bg-green-50 ring-2 ring-green-300" : isToday ? "bg-white shadow-lg ring-4 ring-amber-300" : "bg-white/70",
-                isToday && "animate-[float-soft_2.5s_ease-in-out_infinite]",
-                big && !done && "bg-gradient-to-b from-fuchsia-50 to-pink-100"
-              )}
-            >
-              <span className={cn("text-[11px] font-black uppercase sm:text-xs", isToday ? "text-amber-600" : "text-slate-400")}>{isToday ? "Hôm nay" : `Ngày ${day}`}</span>
-              <span className="relative my-1.5">
-                <Img3D name={big ? "gift" : "gem"} className={cn(big ? "h-10 w-10 sm:h-12 sm:w-12" : "h-7 w-7 sm:h-9 sm:w-9", !done && !isToday && "opacity-70")} />
-                {done && <Img3D name="check" className="absolute -bottom-1 -right-2 h-5 w-5" />}
-              </span>
-              <span className={cn("font-display text-sm font-black sm:text-base", done ? "text-green-600" : big ? "text-fuchsia-600" : "text-sky-600")}>+{pts}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="relative mt-5 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-slate-500">
-          {st.checkedToday ? `Hôm nay em nhận ${st.todayReward} 💎.` : "Bỏ lỡ 1 ngày là chuỗi bắt đầu lại từ ngày 1 đó!"} Đã điểm danh tổng cộng {st.totalDays} ngày.
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-slate-400">
+          {st.checkedToday ? "Mai quay lại để giữ chuỗi nhé!" : "Bỏ lỡ 1 ngày là chuỗi quay về ngày 1."}
+          {!compact && ` · Kỷ lục ${st.bestStreak} ngày · Tổng ${st.totalDays} ngày`}
         </p>
-        {button}
+        {st.checkedToday ? (
+          <span className="flex items-center gap-2 rounded-full bg-slate-100 px-5 py-2.5 text-sm font-black text-slate-500">
+            <Check className="h-4 w-4 text-green-600" strokeWidth={3} /> Đã nhận quà hôm nay
+          </span>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={handleCheckIn}
+            className="flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-6 py-2.5 font-display text-base font-black text-white shadow-[0_4px_0_0_#c2410c] transition hover:-translate-y-0.5 active:translate-y-0.5 active:shadow-none disabled:opacity-60"
+          >
+            {busy ? "Đang nhận..." : `Điểm danh nhận +${st.todayReward}`}
+          </button>
+        )}
       </div>
 
       <Celebration reward={reward} onClose={() => setReward(null)} />

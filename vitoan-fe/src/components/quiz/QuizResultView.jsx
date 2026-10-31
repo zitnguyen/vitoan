@@ -220,6 +220,8 @@ export default function QuizResultView({
   historyLinkPrefix = "/kiem-tra/ket-qua/",
 }) {
   const [onlyWrong, setOnlyWrong] = useState(false);
+  // Hiện bảng điểm trước, bấm "Xem chi tiết" mới mở bảng kết quả từng câu.
+  const [revealed, setRevealed] = useState(false);
   const percent = Math.round((attempt.score / attempt.totalQuestions) * 100);
   const tier = getTier(percent);
   const wrongCount = attempt.totalQuestions - attempt.score;
@@ -231,7 +233,7 @@ export default function QuizResultView({
   const shownAnswers = attempt.answers.map((a, idx) => ({ ...a, idx })).filter((a) => !onlyWrong || !a.correct);
 
   return (
-    <div className="lg:grid lg:grid-cols-[22rem_1fr] lg:items-start lg:gap-6">
+    <div className="lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start lg:gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
       <div className="space-y-4 lg:sticky lg:top-6">
         <div
           className="relative overflow-clip rounded-[2rem] p-8 text-center text-white shadow-[0_24px_50px_-24px_rgba(11,35,64,0.55)]"
@@ -277,6 +279,9 @@ export default function QuizResultView({
                   {attempt.score}/{attempt.totalQuestions}
                 </p>
                 <p className="mt-1 text-body text-white/85">{percent}% chính xác</p>
+                <p className="mt-1 rounded-full bg-white/20 px-3 py-0.5 text-sm font-bold">
+                  Điểm: {score10.toLocaleString("vi-VN")}/10
+                </p>
               </>
             )}
             <p className="mt-3 rounded-full bg-white/85 px-4 py-1 font-display text-body-lg font-black text-ink">{tier.message}</p>
@@ -329,9 +334,6 @@ export default function QuizResultView({
           )}
         </div>
 
-        <FeedbackPanel feedback={attempt.feedback} />
-        <AttemptHistory history={attempt.history} currentId={attempt._id} linkPrefix={historyLinkPrefix} />
-        {isTestAttempt && <AiReviewCard attemptId={attempt._id} />}
 
         {newBadges?.length > 0 && (
           <div className="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-200">
@@ -378,7 +380,40 @@ export default function QuizResultView({
         </div>
       </div>
 
-      <div className="mt-8 lg:mt-0">
+      <div className="mt-6 space-y-4 lg:mt-0">
+        {/* Bản đồ kết quả: nhìn một lượt biết câu nào đúng/sai */}
+        <div className="rounded-2xl bg-white p-5 shadow-elevation-1">
+          <p className="font-display font-bold text-slate-800">Kết quả từng câu</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {attempt.answers.map((a, i) => (
+              <span
+                key={i}
+                title={a.correct ? "Đúng" : "Sai"}
+                className={cn("flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black text-white", a.correct ? "bg-emerald-500" : "bg-rose-400")}
+              >
+                {i + 1}
+              </span>
+            ))}
+          </div>
+          <div className="mt-3 flex gap-4 text-xs font-bold text-slate-500">
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-500" /> Đúng</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-rose-400" /> Sai</span>
+          </div>
+        </div>
+        <FeedbackPanel feedback={attempt.feedback} />
+        <AttemptHistory history={attempt.history} currentId={attempt._id} linkPrefix={historyLinkPrefix} />
+        {isTestAttempt && <AiReviewCard attemptId={attempt._id} />}
+        {!revealed && (
+          <button
+            type="button"
+            onClick={() => setRevealed(true)}
+            className="w-full rounded-2xl bg-secondary px-5 py-3.5 font-display text-base font-bold text-white shadow-elevation-2 transition hover:brightness-110"
+          >
+            Xem chi tiết từng câu
+          </button>
+        )}
+        {revealed && (
+      <div>
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="font-display text-h3 text-slate-800">Xem lại bài làm</p>
           {wrongCount > 0 && (
@@ -493,7 +528,9 @@ export default function QuizResultView({
           })}
         </div>
 
-        <div className="mt-6 lg:hidden">
+      </div>
+        )}
+        <div className="lg:hidden">
           <ActionButtons guest={guest} backTo={resolvedBackTo} backLabel={backLabel} retryTo={retryTo} />
         </div>
       </div>

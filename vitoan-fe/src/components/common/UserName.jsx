@@ -6,10 +6,18 @@ export const NAME_COLORS = {
   blue: { label: "Xanh biển", className: "text-sky-600" },
   orange: { label: "Cam", className: "text-orange-500" },
   purple: { label: "Tím", className: "text-purple-600" },
+  green: { label: "Xanh lá", className: "text-emerald-600" },
+  pink: { label: "Hồng", className: "text-pink-500" },
+  red: { label: "Đỏ", className: "text-red-500" },
   rainbow: {
     label: "Cầu vồng",
     className: "bg-gradient-to-r from-red-500 via-amber-500 via-40% to-purple-600 bg-clip-text text-transparent",
   },
+  // Màu chuyển sắc có ánh chạy (name-shine trong index.css)
+  gold: { label: "Vàng kim", className: "name-shine bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-600 bg-clip-text text-transparent" },
+  ocean: { label: "Đại dương", className: "name-shine bg-gradient-to-r from-cyan-500 via-sky-400 to-indigo-600 bg-clip-text text-transparent" },
+  candy: { label: "Kẹo ngọt", className: "name-shine bg-gradient-to-r from-pink-500 via-fuchsia-400 to-sky-500 bg-clip-text text-transparent" },
+  galaxy: { label: "Thiên hà", className: "name-shine bg-gradient-to-r from-indigo-600 via-fuchsia-500 to-purple-700 bg-clip-text text-transparent" },
 };
 
 export function TitleChip({ title, className }) {

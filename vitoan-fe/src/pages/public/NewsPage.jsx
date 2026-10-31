@@ -69,6 +69,12 @@ export default function NewsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // Gõ xong khoảng nửa giây thì tự tìm (không cần bấm Enter).
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(query.trim()), 450);
+    return () => clearTimeout(t);
+  }, [query]);
+
   // Đổi bộ lọc → tải lại từ trang 1.
   useEffect(() => {
     setLoading(true);
@@ -99,7 +105,7 @@ export default function NewsPage() {
   const [featured, ...rest] = items;
 
   return (
-    <div className="min-h-screen">
+    <div>
       <div className="page">
         <PageHeader
           icon={Newspaper}

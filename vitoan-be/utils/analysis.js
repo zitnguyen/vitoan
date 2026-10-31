@@ -15,7 +15,8 @@ function levelRemark(percent) {
 async function breakdownByLesson(answers) {
   const questionIds = answers.map((a) => a.question?._id || a.question);
   const questions = await Question.find({ _id: { $in: questionIds } }).select("lesson").lean();
-  const lessonOfQuestion = new Map(questions.map((q) => [String(q._id), String(q.lesson)]));
+  // Câu riêng của đề kiểm tra không thuộc bài học nào → bỏ qua khi gom theo bài.
+  const lessonOfQuestion = new Map(questions.filter((q) => q.lesson).map((q) => [String(q._id), String(q.lesson)]));
   const lessons = await Lesson.find({ _id: { $in: [...new Set(lessonOfQuestion.values())] } })
     .select("title chapter")
     .lean();
@@ -104,7 +105,7 @@ async function weakKnowledge(attempts, { subject } = {}) {
   const questions = await Question.find({ _id: { $in: [...tally.keys()] } })
     .select("lesson text type choices correctIndex correctText")
     .lean();
-  const lessonIds = [...new Set(questions.map((q) => String(q.lesson)))];
+  const lessonIds = [...new Set(questions.filter((q) => q.lesson).map((q) => String(q.lesson)))];
   const lessonFilter = { _id: { $in: lessonIds } };
   if (subject) lessonFilter.subject = subject;
   const lessons = await Lesson.find(lessonFilter)

@@ -132,6 +132,23 @@ export default function LessonContentPage() {
     setLearning(data);
   }
 
+  // Vị trí xem dở lưu ngay trên máy mỗi giây — không phụ thuộc request lưu server kịp xong hay chưa khi rời trang
+  const localPosKey = `vitoan_video_pos:${lessonId}`;
+  function readLocalPos() {
+    try {
+      return JSON.parse(localStorage.getItem(localPosKey) || "null");
+    } catch {
+      return null;
+    }
+  }
+  function writeLocalPos(position, duration) {
+    try {
+      localStorage.setItem(localPosKey, JSON.stringify({ position, duration, at: Date.now() }));
+    } catch {
+      // bộ nhớ trình duyệt bị chặn — vẫn còn bản lưu trên server
+    }
+  }
+
   useEffect(() => {
     setLearning(null);
     setLiveVideo(null);
@@ -142,12 +159,15 @@ export default function LessonContentPage() {
       .getLearning(lessonId)
       .then((res) => {
         const v = res.data?.steps?.video;
-        const pos = v?.position || 0;
+        // Bản trên máy (ghi mỗi giây) chính xác hơn bản server (lưu 5 giây/lần) nếu cùng thiết bị
+        const local = readLocalPos();
+        const pos = local?.position > 0 ? local.position : v?.position || 0;
         // Đã xem hết (hoặc gần hết) thì mở lại từ đầu.
-        setResumeAt(pos >= 3 && (!v.duration || pos < v.duration - 10) ? pos : 0);
+        const dur = v?.duration || local?.duration || 0;
+        setResumeAt(pos >= 3 && (!dur || pos < dur - 10) ? pos : 0);
         applyLearning(res.data);
       })
-      .catch(() => setResumeAt(0));
+      .catch(() => setResumeAt(readLocalPos()?.position || 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessonId, isStudent]);
 
@@ -180,6 +200,7 @@ export default function LessonContentPage() {
       onTick: ({ position, duration, bucket }) => {
         if (bucket !== null && bucket !== undefined) watchedRef.current.add(bucket);
         setLiveVideo({ position, duration, count: watchedRef.current.size });
+        if (position > 0) writeLocalPos(position, duration);
       },
       onFlush: ({ buckets, position, duration, final }) => {
         if (!buckets.length && !position) return;
@@ -277,7 +298,14 @@ export default function LessonContentPage() {
           <Lock className="h-7 w-7" />
         </span>
         <p className="mt-4 text-body-lg font-semibold text-slate-800">{loadError}</p>
-        <p className="mt-1 text-caption text-slate-500">Đăng nhập hoặc đăng ký để tiếp tục học bài này.</p>
+        {user ? (
+          <>
+            <p className="mt-1 text-caption text-slate-500">Bài học có thể đã bị xoá hoặc không thuộc lớp của em.</p>
+            <div className="mt-5"><Link to="/" className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark">Về trang chủ</Link></div>
+          </>
+        ) : (
+          <>
+          <p className="mt-1 text-caption text-slate-500">Đăng nhập hoặc đăng ký để tiếp tục học bài này.</p>
         <div className="mt-5 flex gap-3">
           <Link to="/dang-nhap" className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-primary/40 hover:text-primary">
             Đăng nhập
@@ -286,6 +314,8 @@ export default function LessonContentPage() {
             Đăng ký miễn phí
           </Link>
         </div>
+          </>
+        )}
       </div>
     );
   }
@@ -326,16 +356,26 @@ export default function LessonContentPage() {
           <div className="min-w-0">
             {/* ----- Video: hiện ngay đầu trang ----- */}
             <div id="video" className="mx-auto overflow-hidden rounded-3xl bg-slate-900 shadow-elevation-2" style={{ maxWidth: "calc((100vh - 13rem) * 16 / 9)" }}>
-              <div className="aspect-video w-full">
+              <div className="relative aspect-video w-full">
+                {/* Lớp nền nằm dưới video: còn thấy khi video chưa tải được (mất mạng, bị chặn YouTube) */}
+                {review?.videoUrl && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center text-slate-300">
+                    <OwlMascot className="h-14 w-14" animated={false} />
+                    <p className="text-sm font-semibold">Đang tải video… nếu quá lâu, hãy kiểm tra kết nối mạng.</p>
+                    <a href={review.videoUrl} target="_blank" rel="noreferrer" className="text-sm font-bold text-sky-300 underline">
+                      Mở video trên YouTube
+                    </a>
+                  </div>
+                )}
                 {review?.videoUrl && !videoSrc ? (
-                  <div className="h-full w-full animate-pulse bg-slate-800" />
+                  <div className="relative h-full w-full animate-pulse bg-slate-800/60" />
                 ) : review?.videoUrl ? (
                   <iframe
                     key={videoSrc}
                     ref={videoRef}
                     src={videoSrc}
                     title={review.title}
-                    className="h-full w-full"
+                    className="relative h-full w-full"
                     allow="autoplay; encrypted-media; picture-in-picture"
                     allowFullScreen
                   />

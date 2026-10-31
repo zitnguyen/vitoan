@@ -25,6 +25,9 @@ const practiceSetRoutes = require("./routes/practiceSetRoutes");
 const testRoutes = require("./routes/testRoutes");
 const testAttemptRoutes = require("./routes/testAttemptRoutes");
 const adminStatsRoutes = require("./routes/adminStatsRoutes");
+const arenaRoutes = require("./routes/arenaRoutes");
+const reviewSessionRoutes = require("./routes/reviewSessionRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const commentRoutes = require("./routes/commentRoutes");
 const ttsRoutes = require("./routes/ttsRoutes");
 const missionRoutes = require("./routes/missionRoutes");
@@ -88,7 +91,9 @@ app.use(
   authLimiter
 );
 
-app.use(express.json());
+const smallJson = express.json({ limit: "2mb" });
+const bigJson = express.json({ limit: "30mb" }); // riêng cho khôi phục sao lưu
+app.use((req, res, next) => (req.path === "/api/admin/restore" ? bigJson(req, res, next) : smallJson(req, res, next)));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(mongoSanitizeExpress5());
@@ -117,6 +122,9 @@ app.use("/api/practice-sets", practiceSetRoutes);
 app.use("/api/tests", testRoutes);
 app.use("/api/test-attempts", testAttemptRoutes);
 app.use("/api/admin", adminStatsRoutes);
+app.use("/api/arena", arenaRoutes);
+app.use("/api/practice-review", reviewSessionRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/tts", ttsRoutes);
 app.use("/api/uploads", uploadRoutes);

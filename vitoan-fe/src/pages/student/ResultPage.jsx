@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { attemptService } from "../../api/services";
+import ResultMissing from "../../components/quiz/ResultMissing.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import QuizResultView from "../../components/quiz/QuizResultView.jsx";
 import QuizResultLayout from "../../components/quiz/QuizResultLayout.jsx";
@@ -15,18 +16,18 @@ export default function ResultPage() {
     attemptService.getOne(attemptId).then((res) => {
       setAttempt(res.data);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [attemptId]);
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex min-h-[70vh] items-center justify-center">
         <Spinner />
       </div>
     );
   }
 
-  if (!attempt) return null;
+  if (!attempt) return <ResultMissing />;
 
   return (
     <QuizResultLayout>

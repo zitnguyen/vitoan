@@ -4,6 +4,7 @@ import { rewardService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
+import { AdminHeader, adminPageClass } from "../../components/admin/adminUi.jsx";
 import { useDialog } from "../../context/DialogContext.jsx";
 
 const ICONS = { star: Star, sparkles: Sparkles, medal: Medal, smile: Smile, crown: Crown, gift: Gift };
@@ -56,6 +57,7 @@ export default function AdminRewardsPage() {
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("");
   const [filterStock, setFilterStock] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
@@ -70,7 +72,12 @@ export default function AdminRewardsPage() {
     loadRewards();
   }, []);
 
-  const filtered = rewards.filter((r) => {
+  const typeOrder = Object.keys(TYPE_OPTIONS);
+  // Xếp theo loại quà rồi theo giá tăng dần cho dễ so sánh, thay vì theo ngày tạo.
+  const filtered = [...rewards]
+    .sort((a, b) => typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type) || a.costPoints - b.costPoints || a.name.localeCompare(b.name, "vi"))
+    .filter((r) => {
+    if (filterType && r.type !== filterType) return false;
     if (search && !r.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
     if (filterStock === "in" && r.stock === 0) return false;
     if (filterStock === "out" && r.stock !== 0) return false;
@@ -134,18 +141,22 @@ export default function AdminRewardsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl xl:max-w-none xl:px-10 2xl:px-16 px-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-h2 text-slate-800">Phần quà</h1>
-        <Button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-        >
-          <Plus className="h-4 w-4" /> Thêm phần thưởng
-        </Button>
-      </div>
+    <div className={adminPageClass}>
+      <AdminHeader
+        className="mb-0"
+        title="Đổi quà"
+        subtitle="Quà để học sinh dùng điểm thưởng đổi: khung ảnh, danh hiệu, hiệu ứng…"
+        actions={
+          <Button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Thêm phần thưởng
+          </Button>
+        }
+      />
 
       {showForm && (
         <form
@@ -293,6 +304,14 @@ export default function AdminRewardsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <select className={filterSelectClass} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+          <option value="">Tất cả loại quà</option>
+          {Object.entries(TYPE_OPTIONS).map(([value, t]) => (
+            <option key={value} value={value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
         <select className={filterSelectClass} value={filterStock} onChange={(e) => setFilterStock(e.target.value)}>
           <option value="">Tất cả số lượng</option>
           <option value="in">Còn</option>

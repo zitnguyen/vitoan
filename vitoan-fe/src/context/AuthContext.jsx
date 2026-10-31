@@ -68,6 +68,14 @@ export function AuthProvider({ children }) {
     return res.data.user;
   }, []);
 
+  const updatePreferences = useCallback(async (payload) => {
+    const res = await axiosClient.put("/auth/preferences", payload);
+    const auth = getStoredAuth();
+    setStoredAuth({ ...auth, user: res.data.user });
+    setUser(res.data.user);
+    return res.data.user;
+  }, []);
+
   const uploadAvatar = useCallback(async (file) => {
     const formData = new FormData();
     formData.append("avatar", file);
@@ -125,6 +133,7 @@ export function AuthProvider({ children }) {
         loginWithGoogle,
         setGrade,
         updateProfile,
+        updatePreferences,
         uploadAvatar,
         changePassword,
         refreshUser,

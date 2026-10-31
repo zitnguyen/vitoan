@@ -25,7 +25,7 @@ function TrendChart({ byDate }) {
   return (
     <div className="flex h-40 items-end gap-1.5">
       {byDate.map((d) => (
-        <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
+        <div key={d.date} className="flex min-w-0 flex-1 flex-col items-center gap-1 max-sm:even:[&>span]:invisible">
           <div className="flex h-32 w-full items-end justify-center">
             <div
               className="w-full max-w-[18px] rounded-t-md bg-secondary/70 transition-all"
@@ -33,7 +33,7 @@ function TrendChart({ byDate }) {
               title={`${d.date}: ${d.attempts} lượt, ${d.avgPercent}% đúng`}
             />
           </div>
-          <span className="text-xs text-slate-400">{d.date.slice(8, 10)}/{d.date.slice(5, 7)}</span>
+          <span className="text-xs text-slate-400 sm:text-xs">{d.date.slice(8, 10)}/{d.date.slice(5, 7)}</span>
         </div>
       ))}
     </div>
@@ -67,14 +67,14 @@ export default function StatsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex min-h-[70vh] items-center justify-center">
         <Spinner />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
+    <div>
       <div className="page">
         <PageHeader
           icon={BarChart3}

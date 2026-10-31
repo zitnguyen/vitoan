@@ -285,7 +285,10 @@ export default function AdminNewsPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  // load là hàm async (trả về Promise) — không truyền thẳng vào useEffect, nếu không React coi Promise là hàm dọn dẹp và trang bị trắng
+  useEffect(() => {
+    load();
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function patch(a, data) {
     await articleService.update(a._id, data);

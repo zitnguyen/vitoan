@@ -1,8 +1,10 @@
 const Grade = require("../models/Grade");
+const Chapter = require("../models/Chapter");
 
 async function list(req, res, next) {
   try {
-    const grades = await Grade.find().sort({ order: 1 });
+    const isAdmin = req.user && req.user.role === "Admin";
+    const grades = await Grade.find(isAdmin ? {} : { isPublished: { $ne: false } }).sort({ order: 1 });
     res.json({ success: true, data: grades });
   } catch (err) {
     next(err);
@@ -30,6 +32,8 @@ async function update(req, res, next) {
 
 async function remove(req, res, next) {
   try {
+    const used = await Chapter.countDocuments({ grade: req.params.id });
+    if (used) return res.status(400).json({ success: false, message: `Lớp này còn ${used} chương học, hãy xoá hoặc chuyển chương trước. Muốn ẩn khỏi học sinh thì tắt “Hiển thị”.` });
     await Grade.findByIdAndDelete(req.params.id);
     res.json({ success: true, data: null });
   } catch (err) {

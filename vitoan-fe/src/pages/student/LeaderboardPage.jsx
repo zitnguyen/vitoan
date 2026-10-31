@@ -5,7 +5,7 @@ import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
 import PageHeader, { HeaderStat } from "../../components/ui/PageHeader.jsx";
 import UserAvatar from "../../components/common/UserAvatar.jsx";
-import UserName from "../../components/common/UserName.jsx";
+import UserName, { TitleChip } from "../../components/common/UserName.jsx";
 import FloatingIsland from "../../components/common/FloatingIsland.jsx";
 import { Img3D } from "../../lib/icons3d.jsx";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
@@ -27,6 +27,7 @@ function PodiumPerson({ r, first }) {
         {r.fullName}
         {r.isMe && " (em)"}
       </p>
+      {r.equippedTitle && <TitleChip title={r.equippedTitle} className="mt-1.5 bg-white/90" />}
       <p className="mt-1 rounded-full bg-white/25 px-3 py-0.5 text-sm font-black text-white">{r.score} điểm</p>
     </div>
   );
@@ -52,7 +53,7 @@ export default function LeaderboardPage() {
   const rest = rankings.filter((r) => !top.includes(r));
 
   return (
-    <div className="min-h-screen">
+    <div>
       <div className="page">
         <PageHeader
           icon={Trophy}

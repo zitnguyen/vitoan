@@ -24,6 +24,7 @@ import {
 } from "../../components/ui/icons.jsx";
 import { lessonService, questionService, attemptService, practiceSetService } from "../../api/services";
 import { useAuth } from "../../context/AuthContext.jsx";
+import FocusShell from "../../components/layout/FocusShell.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import Button from "../../components/ui/Button.jsx";
 import QuizResultView from "../../components/quiz/QuizResultView.jsx";
@@ -216,30 +217,35 @@ export default function PlayQuizPage() {
   useEffect(() => () => stopSpeaking(), []);
   useEffect(() => setZoom(100), [current]);
   useEffect(() => setHintError(""), [current]);
-  useEffect(() => {
-    const q = questions[current];
-    if (q && !checked[q._id] && (q.type === "listen_choice" || q.type === "listen_fill")) {
-      speakQuestionText(q.audioText || q.text);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, questions]);
+  // Không tự đọc câu hỏi — em bấm nút loa khi muốn nghe. Chuyển câu khác thì tắt tiếng ngay.
+  useEffect(() => stopSpeaking(), [current]);
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Spinner />
-      </div>
+      <FocusShell>
+        <div className="flex min-h-[70vh] items-center justify-center">
+          <Spinner />
+        </div>
+      </FocusShell>
     );
   }
 
   if (loadError) {
     return (
+      <FocusShell>
       <div className="mx-auto flex max-w-md flex-col items-center px-4 py-10 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
           <Lock className="h-7 w-7" />
         </span>
         <p className="mt-4 text-body-lg font-semibold text-slate-800">{loadError}</p>
-        <p className="mt-1 text-caption text-slate-500">Đăng nhập hoặc đăng ký để tiếp tục luyện tập bài học này.</p>
+        {user ? (
+          <>
+            <p className="mt-1 text-caption text-slate-500">Bài học có thể đã bị xoá hoặc không thuộc lớp của em.</p>
+            <div className="mt-5"><Link to="/" className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark">Về trang chủ</Link></div>
+          </>
+        ) : (
+          <>
+          <p className="mt-1 text-caption text-slate-500">Đăng nhập hoặc đăng ký để tiếp tục luyện tập bài học này.</p>
         <div className="mt-5 flex gap-3">
           <Link to="/dang-nhap" className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-primary/40 hover:text-primary">
             Đăng nhập
@@ -248,7 +254,10 @@ export default function PlayQuizPage() {
             Đăng ký miễn phí
           </Link>
         </div>
+          </>
+        )}
       </div>
+      </FocusShell>
     );
   }
 
@@ -262,9 +271,9 @@ export default function PlayQuizPage() {
 
   if (questions.length === 0) {
     return (
-      <p className="mx-auto max-w-xl px-4 py-10 text-center text-body text-slate-500">
-        Bài này chưa có câu hỏi.
-      </p>
+      <FocusShell>
+        <p className="mx-auto max-w-xl px-4 py-16 text-center text-xl font-semibold text-slate-500">Bài này chưa có câu hỏi.</p>
+      </FocusShell>
     );
   }
 
@@ -557,7 +566,7 @@ export default function PlayQuizPage() {
               })}
             </div>
           ) : (
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mt-5 grid grid-cols-2 gap-3 lg:max-h-[55vh] lg:overflow-y-auto lg:pr-1">
               {question.choices.map((choice, idx) => {
                 const isCorrectChoice = isLocked && idx === currentResult.correctIndex;
                 const isWrongPick = isLocked && idx === selected && !currentResult.correct;
@@ -568,7 +577,7 @@ export default function PlayQuizPage() {
                       disabled={isLocked}
                       onClick={() => selectChoice(idx)}
                       className={cn(
-                        "flex min-h-[5.5rem] w-full flex-col items-center justify-center gap-1 rounded-2xl px-3 py-3 text-center text-xl font-bold ring-2 transition",
+                        "flex min-h-[4.5rem] w-full flex-col items-center justify-center gap-1 rounded-2xl px-9 py-3 text-center text-lg font-bold ring-2 transition",
                         isCorrectChoice && "border-primary bg-primary/10 text-primary",
                         isWrongPick && "border-red-400 bg-red-50 text-red-600",
                         !isLocked &&
@@ -577,7 +586,7 @@ export default function PlayQuizPage() {
                             : "bg-white text-slate-700 ring-slate-200 shadow-[0_4px_0_0_#e2e8f0] hover:-translate-y-0.5 hover:ring-sky-300")
                       )}
                     >
-                      <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-500">
+                      <span className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-black text-slate-500">
                         {letters[idx]}
                       </span>
                       {(isCorrectChoice || isWrongPick) && (
@@ -666,32 +675,30 @@ export default function PlayQuizPage() {
           </div>
         )}
 
-        {!isLocked && (
-          <div className="mt-6 flex items-center justify-between gap-3">
-            <Button
-              variant="outline"
-              disabled={current === 0}
-              onClick={() => goTo(current - 1)}
-              className="rounded-full px-5"
-            >
-              <ChevronLeft className="h-4 w-4" /> Câu trước
-            </Button>
-            <Button onClick={handleCheck} disabled={!currentAnswered || checking} className="rounded-full px-8">
-              {checking ? "Đang kiểm tra..." : "Kiểm tra"}
-            </Button>
-          </div>
-        )}
-        {isLocked && current > 0 && (
-          <div className="mt-4">
-            <Button
-              variant="outline"
-              onClick={() => goTo(current - 1)}
-              className="rounded-full px-5"
-            >
+        {/* Điều hướng: Câu trước · Kiểm tra (giữa) · Câu sau */}
+        {/* Thanh điều hướng dính đáy màn hình: nút luôn ở một chỗ dù câu hỏi dài/ngắn khác nhau */}
+        <div className="h-20" aria-hidden />
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/70 bg-white/90 backdrop-blur">
+          <div className="mx-auto grid max-w-6xl grid-cols-3 items-center gap-3 px-4 py-3 sm:px-6 xl:max-w-none xl:px-10 2xl:px-16">
+          <div>
+            <Button variant="outline" disabled={current === 0} onClick={() => goTo(current - 1)} className="rounded-full px-5">
               <ChevronLeft className="h-4 w-4" /> Câu trước
             </Button>
           </div>
-        )}
+          <div className="flex justify-center">
+            {!isLocked && (
+              <Button onClick={handleCheck} disabled={!currentAnswered || checking} className="rounded-full px-8">
+                {checking ? "Đang kiểm tra..." : "Kiểm tra"}
+              </Button>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button variant="outline" disabled={current >= questions.length - 1} onClick={() => goTo(current + 1)} className="rounded-full px-5">
+              Câu sau <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          </div>
+        </div>
       </div>
     </div>
   );

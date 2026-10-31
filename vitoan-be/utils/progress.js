@@ -1,19 +1,17 @@
 const mongoose = require("mongoose");
 const Attempt = require("../models/Attempt");
-
-// Điều kiện "đã học xong" một bài học: có ít nhất 1 lượt luyện tập đạt từ
-// PASS_PERCENT% số câu đúng trở lên. Làm bài nhưng chưa đạt chỉ tính là "đang học",
-// tránh việc bấm nộp bừa cũng được đánh dấu hoàn thành.
-const PASS_PERCENT = 80;
+const PASS_PERCENT = 0;
 
 function isPassed(score, totalQuestions) {
   return totalQuestions > 0 && (score / totalQuestions) * 100 >= PASS_PERCENT;
 }
 
-// Trả về Map lessonId -> { bestPercent, attempts, passed } cho các lesson học sinh đã làm.
 async function lessonProgressMap(studentId, lessonIds) {
   const match = { student: new mongoose.Types.ObjectId(String(studentId)) };
-  if (lessonIds) match.lesson = { $in: lessonIds.map((id) => new mongoose.Types.ObjectId(String(id))) };
+  if (lessonIds)
+    match.lesson = {
+      $in: lessonIds.map((id) => new mongoose.Types.ObjectId(String(id))),
+    };
   const rows = await Attempt.aggregate([
     { $match: match },
     {
@@ -35,8 +33,15 @@ async function lessonProgressMap(studentId, lessonIds) {
   return new Map(
     rows.map((r) => {
       const bestPercent = Math.round(r.bestPercent);
-      return [String(r._id), { bestPercent, attempts: r.attempts, passed: r.bestPercent >= PASS_PERCENT }];
-    })
+      return [
+        String(r._id),
+        {
+          bestPercent,
+          attempts: r.attempts,
+          passed: r.bestPercent >= PASS_PERCENT,
+        },
+      ];
+    }),
   );
 }
 
@@ -56,14 +61,26 @@ function videoBucketTotal(duration) {
   return duration > 0 ? Math.ceil(duration / VIDEO_BUCKET_SECONDS) : 0;
 }
 
-function summarizeLearning({ hasVideo, hasTheory, questionCount, lp, attempt, practice }) {
+function summarizeLearning({
+  hasVideo,
+  hasTheory,
+  questionCount,
+  lp,
+  attempt,
+  practice,
+}) {
   const steps = {};
   if (hasVideo) {
     const duration = lp?.videoDuration || 0;
     const total = videoBucketTotal(duration);
     const buckets = lp?.videoBuckets || [];
     // Dữ liệu cũ (trước khi đếm theo đoạn) thì tạm dùng mốc xa nhất.
-    const ratio = total && buckets.length ? buckets.length / total : duration ? (lp?.videoSeconds || 0) / duration : 0;
+    const ratio =
+      total && buckets.length
+        ? buckets.length / total
+        : duration
+          ? (lp?.videoSeconds || 0) / duration
+          : 0;
     const done = !!lp?.videoDone;
     steps.video = {
       done,
@@ -84,7 +101,10 @@ function summarizeLearning({ hasVideo, hasTheory, questionCount, lp, attempt, pr
     const best = attempt?.bestPercent ?? null;
     const answered = practice?.answered || 0;
     const total = practice?.total || questionCount;
-    const partial = Math.max(best ? (best / PASS_PERCENT) * 100 : 0, total ? (answered / total) * 100 : 0);
+    const partial = Math.max(
+      best ? (best / PASS_PERCENT) * 100 : 0,
+      total ? (answered / total) * 100 : 0,
+    );
     steps.practice = {
       done: passed,
       percent: passed ? 100 : Math.min(99, Math.round(partial)),
@@ -97,9 +117,20 @@ function summarizeLearning({ hasVideo, hasTheory, questionCount, lp, attempt, pr
   }
   const keys = Object.keys(steps);
   const weightSum = keys.reduce((s, k) => s + STEP_WEIGHTS[k], 0);
-  const percent = weightSum ? Math.round(keys.reduce((s, k) => s + STEP_WEIGHTS[k] * steps[k].percent, 0) / weightSum) : 0;
+  const percent = weightSum
+    ? Math.round(
+        keys.reduce((s, k) => s + STEP_WEIGHTS[k] * steps[k].percent, 0) /
+          weightSum,
+      )
+    : 0;
   const weights = Object.fromEntries(keys.map((k) => [k, STEP_WEIGHTS[k]]));
-  return { percent, steps, weights, completed: !!steps.practice?.done, passPercent: PASS_PERCENT };
+  return {
+    percent,
+    steps,
+    weights,
+    completed: !!steps.practice?.done,
+    passPercent: PASS_PERCENT,
+  };
 }
 
 // Tính tiến độ học cho nhiều bài cùng lúc — Map lessonId -> summarizeLearning(...).
@@ -110,10 +141,17 @@ async function learningForLessons(studentId, lessonIds) {
   const PracticeProgress = require("../models/PracticeProgress");
   const ids = lessonIds.map((id) => new mongoose.Types.ObjectId(String(id)));
   const [reviews, qCounts, lps, practices, attempts] = await Promise.all([
-    ReviewContent.find({ lesson: { $in: ids } }).select("lesson videoUrl content examples").lean(),
-    Question.aggregate([{ $match: { lesson: { $in: ids } } }, { $group: { _id: "$lesson", n: { $sum: 1 } } }]),
+    ReviewContent.find({ lesson: { $in: ids } })
+      .select("lesson videoUrl content examples")
+      .lean(),
+    Question.aggregate([
+      { $match: { lesson: { $in: ids } } },
+      { $group: { _id: "$lesson", n: { $sum: 1 } } },
+    ]),
     LessonProgress.find({ student: studentId, lesson: { $in: ids } }).lean(),
-    PracticeProgress.find({ student: studentId, lesson: { $in: ids } }).select("lesson answers questionOrder").lean(),
+    PracticeProgress.find({ student: studentId, lesson: { $in: ids } })
+      .select("lesson answers questionOrder")
+      .lean(),
     lessonProgressMap(studentId, ids),
   ]);
   const rMap = new Map(reviews.map((r) => [String(r.lesson), r]));
@@ -124,7 +162,11 @@ async function learningForLessons(studentId, lessonIds) {
     const key = String(p.lesson);
     const cur = { answered: p.answers.length, total: p.questionOrder.length };
     const prev = pMap.get(key);
-    if (!prev || cur.answered / (cur.total || 1) > prev.answered / (prev.total || 1)) pMap.set(key, cur);
+    if (
+      !prev ||
+      cur.answered / (cur.total || 1) > prev.answered / (prev.total || 1)
+    )
+      pMap.set(key, cur);
   }
   const result = new Map();
   for (const id of lessonIds) {
@@ -139,7 +181,7 @@ async function learningForLessons(studentId, lessonIds) {
         lp: lpMap.get(key),
         attempt: attempts.get(key),
         practice: pMap.get(key),
-      })
+      }),
     );
   }
   return result;

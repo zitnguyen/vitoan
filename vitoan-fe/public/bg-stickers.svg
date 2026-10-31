@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480">
+  <!-- Nền sticker học đường: nét vẽ tay màu pastel, lặp lại mỗi 480px -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="5" opacity="0.32">
+    <!-- ngôi sao -->
+    <path d="M70 52 l9 20 22 3 -16 15 4 22 -19 -11 -19 11 4 -22 -16 -15 22 -3z" stroke="#fbbf24" fill="#fde68a" fill-opacity="0.5"/>
+    <path d="M388 318 l7 15 17 2 -12 11 3 17 -15 -9 -15 9 3 -17 -12 -11 17 -2z" stroke="#f59e0b" fill="#fde68a" fill-opacity="0.5"/>
+    <!-- bút chì -->
+    <g transform="translate(250 38) rotate(35)"><rect x="0" y="0" width="22" height="78" rx="4" stroke="#fb923c" fill="#fed7aa" fill-opacity="0.6"/><path d="M0 78 l11 20 11 -20" stroke="#fb923c" fill="#fde7c7" fill-opacity="0.7"/><path d="M0 16h22" stroke="#fb923c"/></g>
+    <!-- đám mây -->
+    <path d="M330 120 a18 18 0 0 1 34 -6 a15 15 0 0 1 22 14 a13 13 0 0 1 -2 26 h-54 a14 14 0 0 1 0 -34z" stroke="#7dd3fc" fill="#e0f2fe" fill-opacity="0.7"/>
+    <path d="M40 330 a14 14 0 0 1 26 -5 a11 11 0 0 1 17 10 a10 10 0 0 1 -1 20 h-42 a11 11 0 0 1 0 -25z" stroke="#7dd3fc" fill="#e0f2fe" fill-opacity="0.7"/>
+    <!-- cầu vồng -->
+    <path d="M150 430 a50 50 0 0 1 100 0" stroke="#f472b6"/><path d="M162 430 a38 38 0 0 1 76 0" stroke="#fbbf24"/><path d="M174 430 a26 26 0 0 1 52 0" stroke="#34d399"/>
+    <!-- sách mở -->
+    <g transform="translate(395 40)"><path d="M0 12 q22 -12 40 0 v46 q-18 -10 -40 0z" stroke="#a78bfa" fill="#ede9fe" fill-opacity="0.7"/><path d="M40 12 q22 -12 40 0 v46 q-18 -10 -40 0z" stroke="#a78bfa" fill="#ede9fe" fill-opacity="0.7"/></g>
+    <!-- dấu cộng, chấm tròn, trái tim -->
+    <path d="M200 190 v26 M187 203 h26" stroke="#34d399"/>
+    <path d="M440 220 v20 M430 230 h20" stroke="#f472b6"/>
+    <circle cx="110" cy="200" r="9" stroke="#f9a8d4" fill="#fce7f3" fill-opacity="0.8"/>
+    <circle cx="300" cy="280" r="7" stroke="#93c5fd" fill="#dbeafe" fill-opacity="0.8"/>
+    <circle cx="450" cy="440" r="8" stroke="#fcd34d" fill="#fef3c7" fill-opacity="0.8"/>
+    <path d="M280 360 c-14 -14 -34 6 -14 24 l14 12 14 -12 c20 -18 0 -38 -14 -24z" stroke="#fb7185" fill="#fecdd3" fill-opacity="0.6"/>
+    <!-- hình học: tam giác, vuông -->
+    <path d="M60 430 l24 -42 24 42z" stroke="#60a5fa" fill="#dbeafe" fill-opacity="0.5"/>
+    <rect x="330" y="395" width="34" height="34" rx="6" stroke="#c084fc" fill="#f3e8ff" fill-opacity="0.5" transform="rotate(12 347 412)"/>
+  </g>
+  <!-- chữ và số -->
+  <g font-family="Nunito, Arial Rounded MT Bold, Arial, sans-serif" font-weight="900" opacity="0.3">
+    <text x="150" y="70" font-size="40" fill="#f87171" transform="rotate(-10 160 60)">A</text>
+    <text x="30" y="165" font-size="36" fill="#38bdf8" transform="rotate(8 40 155)">1+2</text>
+    <text x="250" y="190" font-size="38" fill="#a78bfa" transform="rotate(-8 270 180)">Bb</text>
+    <text x="395" y="150" font-size="36" fill="#34d399" transform="rotate(10 410 140)">5</text>
+    <text x="30" y="255" font-size="34" fill="#fb923c" transform="rotate(-6 40 245)">ă â</text>
+    <text x="150" y="300" font-size="36" fill="#f472b6" transform="rotate(7 160 290)">3×4</text>
+    <text x="370" y="270" font-size="34" fill="#60a5fa" transform="rotate(-9 380 260)">ơ</text>
+    <text x="190" y="385" font-size="34" fill="#fbbf24" transform="rotate(6 200 375)">9−4</text>
+    <text x="410" y="385" font-size="38" fill="#c084fc" transform="rotate(-7 420 375)">Cc</text>
+    <text x="20" y="400" font-size="34" fill="#34d399" transform="rotate(10 30 390)">=</text>
+  </g>
+</svg>

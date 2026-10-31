@@ -26,7 +26,7 @@ function MissionCard({ mission, onClaim, claiming, learnTo }) {
   return (
     <div
       className={cn(
-        "relative flex flex-col gap-4 overflow-clip rounded-[1.75rem] p-5 shadow-elevation-1 transition hover:-translate-y-0.5",
+        "relative flex h-full flex-col gap-4 overflow-clip rounded-[1.75rem] p-5 shadow-elevation-1 transition hover:-translate-y-0.5",
         mission.claimed ? "bg-slate-50" : done ? "bg-gradient-to-br from-amber-50 to-yellow-100 ring-2 ring-amber-300" : "bg-white"
       )}
     >
@@ -37,14 +37,14 @@ function MissionCard({ mission, onClaim, claiming, learnTo }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-display text-lg font-black text-[#0b2340]">{mission.title}</p>
-          <p className="mt-0.5 text-sm font-semibold text-slate-500">{mission.description}</p>
+          <p className="mt-0.5 line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-slate-500">{mission.description}</p>
         </div>
-        <span className="flex shrink-0 items-center gap-1 rounded-full bg-white px-3 py-1 text-sm font-black text-sky-600 shadow-sm">
+        <span className="flex w-[4.5rem] shrink-0 items-center justify-center gap-1 rounded-full bg-white py-1 text-sm font-black text-sky-600 shadow-sm">
           <Img3D name="gem" className="h-5 w-5" /> +{mission.rewardPoints}
         </span>
       </div>
 
-      <div className="relative flex items-center gap-3">
+      <div className="relative mt-auto flex items-center gap-3">
         <div className="h-3 flex-1 overflow-clip rounded-full bg-slate-100">
           <div
             className={cn("h-full rounded-full transition-all duration-700", done ? "bg-gradient-to-r from-amber-400 to-orange-400" : "bg-gradient-to-r from-primary to-lime-400")}
@@ -111,7 +111,7 @@ export default function MissionsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex min-h-[70vh] items-center justify-center">
         <Spinner />
       </div>
     );
@@ -122,7 +122,7 @@ export default function MissionsPage() {
   const weekly = missions.filter((m) => m.type === "weekly");
 
   return (
-    <div className="min-h-screen">
+    <div>
       <div className="page">
         <PageHeader
           icon={Target}

@@ -17,6 +17,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import LessonAvatar from "../../components/common/LessonAvatar.jsx";
 import { cn } from "../../lib/utils";
 import { Img3D } from "../../lib/icons3d.jsx";
+import { currentSemester, SEMESTER_RANGE } from "../../lib/semester.js";
 
 const SUBJECT_STYLES = {
   toan: {
@@ -129,7 +130,7 @@ export default function LessonListPage() {
   const [chapters, setChapters] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [tests, setTests] = useState([]);
-  const [activeSemester, setActiveSemester] = useState(1);
+  const [activeSemester, setActiveSemester] = useState(currentSemester());
   const [search, setSearch] = useState("");
   const [continueItem, setContinueItem] = useState(null);
   const [completedLessonIds, setCompletedLessonIds] = useState(new Set());
@@ -150,6 +151,20 @@ export default function LessonListPage() {
     setContinueItem(data.continueItem);
     setCompletedLessonIds(data.completedLessonIds);
   }
+
+  // Đường dẫn môn không tồn tại (gõ sai) → về môn đầu tiên thay vì hiện trang trống.
+  useEffect(() => {
+    if (subjects.length > 0 && !subjects.some((s) => s.slug === subjectSlug)) {
+      navigate(`/lop/${gradeSlug}/${subjects[0].slug}`, { replace: true });
+    }
+  }, [subjects, subjectSlug, gradeSlug, navigate]);
+
+  // Học sinh chỉ học đúng lớp đã chọn: vào link lớp khác thì đưa về lớp của em.
+  useEffect(() => {
+    if (isStudent && user?.grade?.slug && gradeSlug !== user.grade.slug) {
+      navigate(`/lop/${user.grade.slug}/${subjectSlug}`, { replace: true });
+    }
+  }, [isStudent, user?.grade?.slug, gradeSlug, subjectSlug, navigate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -184,6 +199,7 @@ export default function LessonListPage() {
   const activeChapter = useMemo(() => {
     const fromParam = chapters.find((c) => c._id === chapterParam);
     if (fromParam) return fromParam;
+    // Không chọn gì: mở học kỳ theo thời gian thực tế (HK1 T9–T1, HK2 T2–T5), nếu lớp chưa có thì lấy chủ đề đầu tiên.
     return chapters.find((c) => (c.semester || 1) === activeSemester) || chapters[0] || null;
   }, [chapters, chapterParam, activeSemester]);
 
@@ -218,7 +234,7 @@ export default function LessonListPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex min-h-[70vh] items-center justify-center">
         <Spinner />
       </div>
     );
@@ -251,18 +267,20 @@ export default function LessonListPage() {
             <div className="min-w-[15rem] flex-1">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="font-display text-4xl font-black text-[#0b2340] sm:text-5xl">{grade?.name || "Chọn lớp"}</h1>
+                {!(isStudent && user?.grade?.slug) && grades.length > 1 && (
                 <select
                   value={gradeSlug}
                   onChange={(e) => navigate(`/lop/${e.target.value}/${subjectSlug}`)}
                   className="cursor-pointer rounded-full bg-white/90 px-4 py-2 text-sm font-black text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   aria-label="Đổi lớp"
                 >
-                  {grades.map((g) => (
+                  {grades.filter((g) => !(isStudent && user?.grade?.slug) || g.slug === user.grade.slug).map((g) => (
                     <option key={g._id} value={g.slug}>
                       {g.name}
                     </option>
                   ))}
                 </select>
+                )}
               </div>
               <div className="mt-4 inline-flex rounded-full bg-white/70 p-1.5 shadow-sm backdrop-blur">
                 {subjects.map((s) => {
@@ -345,7 +363,7 @@ export default function LessonListPage() {
         ) : (
           <div id="chu-de" className="mt-5 grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
             {/* ── Cột trái: danh sách chủ đề ── */}
-            <div className="overflow-clip rounded-[1.75rem] bg-white shadow-elevation-2 lg:sticky lg:top-24">
+            <div className="overflow-clip rounded-[1.75rem] bg-white shadow-elevation-2">
               <div className="m-3 mb-0 grid grid-cols-2 rounded-full bg-slate-100 p-1">
                 {[1, 2].map((sem) => (
                   <button
@@ -358,9 +376,16 @@ export default function LessonListPage() {
                     )}
                   >
                     Học kỳ {sem}
+                    <span className="block text-xs font-bold text-slate-400">
+                      {SEMESTER_RANGE[sem]}
+                      {currentSemester() === sem && " · hiện tại"}
+                    </span>
                   </button>
                 ))}
               </div>
+              <p className="px-4 pt-2 text-xs font-semibold text-slate-400">
+                Em có thể học lần lượt theo thứ tự gợi ý hoặc chọn chủ đề bất kỳ trong lớp mình.
+              </p>
               <div className="px-3 pt-3">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
@@ -376,7 +401,7 @@ export default function LessonListPage() {
               {filteredChapters.length === 0 ? (
                 <p className="px-4 py-4 text-sm text-slate-400">Không tìm thấy chủ đề phù hợp.</p>
               ) : (
-                <div className="max-h-[60vh] space-y-1.5 overflow-y-auto p-3">
+                <div className="space-y-1.5 p-3">
                   {filteredChapters.map((chapter, ci) => {
                     const selected = activeChapter?._id === chapter._id;
                     const cLessons = lessons.filter((l) => l.chapter === chapter._id);

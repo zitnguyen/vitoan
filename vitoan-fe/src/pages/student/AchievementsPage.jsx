@@ -85,7 +85,7 @@ export default function AchievementsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex min-h-[70vh] items-center justify-center">
         <Spinner />
       </div>
     );
@@ -98,7 +98,7 @@ export default function AchievementsPage() {
   const sortedBadges = [...badges].sort((a, b) => pct(b) - pct(a));
 
   return (
-    <div className="min-h-screen">
+    <div>
       <div className="page">
         <PageHeader
           icon={Trophy}
@@ -119,7 +119,7 @@ export default function AchievementsPage() {
           <>
           {/* Tiến độ tổng */}
           <div className="mt-6 flex flex-wrap items-center gap-4 rounded-[1.75rem] bg-white px-6 py-4 shadow-elevation-1">
-            <Img3D name="trophy" className="h-12 w-12" />
+            <Img3D name="goldMedal" className="h-12 w-12" />
             <div className="min-w-[12rem] flex-1">
               <p className="font-display text-lg font-black text-[#0b2340]">
                 Em đã sưu tầm {earnedCount}/{badges.length} huy hiệu

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import IdBadge from "../../components/common/IdBadge.jsx";
-import { Pencil, Trash2, X, Plus, Search, Eye, EyeOff } from "lucide-react";
+import { Pencil, Trash2, X, Plus, Search, Eye, EyeOff, Copy, ChevronDown } from "lucide-react";
 import { gradeService, subjectService, chapterService, lessonService, questionService, testService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
+import CustomQuestionPanel from "../../components/admin/CustomQuestionPanel.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
+import { AdminHeader, adminPageClass } from "../../components/admin/adminUi.jsx";
 import { useDialog } from "../../context/DialogContext.jsx";
 
 const EMPTY_FORM = {
@@ -37,6 +39,8 @@ export default function AdminTestsPage() {
   const [questionPool, setQuestionPool] = useState([]);
   const [loadingPool, setLoadingPool] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [perLessonN, setPerLessonN] = useState(3);
+  const [customs, setCustoms] = useState([]); // câu hỏi riêng của đề đang soạn
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
@@ -61,13 +65,27 @@ export default function AdminTestsPage() {
       level: filterLevel || undefined,
       status: filterStatus || undefined,
     });
-    setTests(res.data);
+    // Xếp theo lớp → môn → loại đề (chủ đề, giữa kỳ, cuối kỳ) → học kỳ/chủ đề cho dễ tìm.
+    const TYPE_ORDER = { topic: 0, midterm: 1, final: 2 };
+    setTests(
+      [...res.data].sort(
+        (x, y) =>
+          (x.grade?.order ?? 0) - (y.grade?.order ?? 0) ||
+          (x.subject?.name || "").localeCompare(y.subject?.name || "", "vi") ||
+          (TYPE_ORDER[x.testType] ?? 0) - (TYPE_ORDER[y.testType] ?? 0) ||
+          (x.semester || 1) - (y.semester || 1) ||
+          (x.chapter?.order ?? 0) - (y.chapter?.order ?? 0) ||
+          x.title.localeCompare(y.title, "vi")
+      )
+    );
     setLoadingList(false);
   }
 
   useEffect(() => {
     Promise.all([gradeService.list(), subjectService.list()]).then(([gradesRes, subjectsRes]) => {
       setGrades(gradesRes.data);
+      // Khối đang triển khai là Lớp 1: mặc định lọc theo lớp đầu tiên.
+      setFilterGrade([...gradesRes.data].sort((x, y) => (x.order || 0) - (y.order || 0))[0]?._id || "");
       setSubjects(subjectsRes.data);
       setLoading(false);
     });
@@ -116,11 +134,34 @@ export default function AdminTestsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.subject, form.grade, form.testType, form.chapter, form.semester, chapters]);
 
+  // Thêm toàn bộ câu hỏi của một bài kiểm tra có sẵn vào bài đang soạn (không trùng).
+  async function copyFromTest(testId) {
+    if (!testId) return;
+    const res = await testService.getOne(testId);
+    const ids = res.data.questions.map((q) => q._id);
+    setForm((f) => ({ ...f, questions: [...new Set([...f.questions, ...ids])] }));
+  }
+
   // Chọn nhanh ngẫu nhiên n câu từ kho câu hỏi đang hiển thị (rải đều các bài học).
   async function pickRandom(n) {
     const all = questionPool.flatMap((g) => g.questions.map((q) => q._id));
     const shuffled = [...all].sort(() => Math.random() - 0.5);
     setForm((f) => ({ ...f, questions: shuffled.slice(0, n) }));
+  }
+
+  // Chọn ngẫu nhiên mỗi bài học n câu (giữ nguyên phần đã chọn ở bài khác nếu chỉ định 1 bài).
+  function pickPerLesson(n, onlyLessonId) {
+    setForm((f) => {
+      let keep = f.questions;
+      const picked = [];
+      for (const { lesson, questions } of questionPool) {
+        if (onlyLessonId && lesson._id !== onlyLessonId) continue;
+        const ids = questions.map((q) => q._id);
+        keep = keep.filter((id) => !ids.includes(id));
+        picked.push(...[...ids].sort(() => Math.random() - 0.5).slice(0, n));
+      }
+      return { ...f, questions: [...keep, ...picked] };
+    });
   }
 
   // Đến từ ô tra cứu ID (?edit=<testId>) → mở luôn form sửa bài kiểm tra đó.
@@ -150,6 +191,7 @@ export default function AdminTestsPage() {
     });
     testService.getOne(test._id).then((res) => {
       setForm((f) => ({ ...f, questions: res.data.questions.map((q) => q._id) }));
+      setCustoms(res.data.questions.filter((q) => q.testOnly));
     });
   }
 
@@ -157,6 +199,7 @@ export default function AdminTestsPage() {
     setEditingId(null);
     setShowForm(false);
     setForm(EMPTY_FORM);
+    setCustoms([]);
     setError("");
   }
 
@@ -186,6 +229,14 @@ export default function AdminTestsPage() {
       setError("Chọn ít nhất 1 câu hỏi cho bài kiểm tra");
       return;
     }
+    if (form.questions.length < 8 && form.isActive !== false) {
+      const ok = await dialog.confirm({
+        message: `Đề này mới có ${form.questions.length} câu — quá ngắn nên điểm khó phản ánh đúng năng lực. Vẫn lưu và cho học sinh làm?`,
+        confirmText: "Vẫn lưu",
+        cancelText: "Chọn thêm câu",
+      });
+      if (!ok) return;
+    }
     try {
       const payload = { ...form, chapter: form.testType === "topic" ? form.chapter : null };
       if (editingId) {
@@ -206,6 +257,24 @@ export default function AdminTestsPage() {
     await loadTests();
   }
 
+  async function handleDuplicate(test) {
+    await testService.duplicate(test._id);
+    await loadTests();
+  }
+
+  const [collapsed, setCollapsed] = useState({});
+
+  // Gom đề theo Môn → Loại đề để quét nhanh thay vì một danh sách dài (giống cách Moodle/Udemy chia theo phần).
+  const groups = (() => {
+    const map = new Map();
+    for (const t of tests) {
+      const key = `${t.grade?.name || ""}|${t.subject?.name || ""}|${t.testType}`;
+      if (!map.has(key)) map.set(key, { key, title: `${t.grade?.name || ""} · ${t.subject?.name || ""} — ${TEST_TYPE_LABEL[t.testType]}`, items: [] });
+      map.get(key).items.push(t);
+    }
+    return [...map.values()];
+  })();
+
   async function toggleStatus(test) {
     await testService.update(test._id, { isActive: !test.isActive });
     await loadTests();
@@ -220,18 +289,22 @@ export default function AdminTestsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl xl:max-w-none xl:px-10 2xl:px-16 px-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-h2 text-slate-800">Quản lý bài kiểm tra</h1>
-        <Button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-        >
-          <Plus className="h-4 w-4" /> Thêm bài kiểm tra
-        </Button>
-      </div>
+    <div className={adminPageClass}>
+      <AdminHeader
+        className="mb-0"
+        title="Bài kiểm tra"
+        subtitle="Tạo đề theo chủ đề, giữa kỳ, cuối kỳ cho từng lớp và môn."
+        actions={
+          <Button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Thêm bài kiểm tra
+          </Button>
+        }
+      />
 
       {showForm && (
         <form
@@ -349,11 +422,38 @@ export default function AdminTestsPage() {
             </label>
           </div>
 
+          <CustomQuestionPanel
+            customs={customs}
+            onAdd={(q) => {
+              setCustoms((c) => [...c, q]);
+              setForm((f) => ({ ...f, questions: [...f.questions, q._id] }));
+            }}
+            onUpdate={(q) => setCustoms((c) => c.map((x) => (x._id === q._id ? q : x)))}
+            onRemove={(id) => {
+              setCustoms((c) => c.filter((x) => x._id !== id));
+              setForm((f) => ({ ...f, questions: f.questions.filter((x) => x !== id) }));
+            }}
+          />
+
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-caption font-semibold text-slate-500">
                 6. Chọn câu hỏi cho bài kiểm tra ({form.questions.length} đã chọn)
               </p>
+              <select
+                value=""
+                onChange={(e) => copyFromTest(e.target.value)}
+                className="rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-600"
+              >
+                <option value="">+ Thêm câu từ bài kiểm tra có sẵn…</option>
+                {tests
+                  .filter((t) => t._id !== editingId && (!form.subject || t.subject?._id === form.subject) && (!form.grade || t.grade?._id === form.grade))
+                  .map((t) => (
+                    <option key={t._id} value={t._id}>
+                      {t.title} ({t.questionCount} câu)
+                    </option>
+                  ))}
+              </select>
               {questionPool.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 text-sm">
                   <span className="text-slate-400">Chọn nhanh ngẫu nhiên:</span>
@@ -367,6 +467,21 @@ export default function AdminTestsPage() {
                       {n} câu
                     </button>
                   ))}
+                  <span className="ml-2 text-slate-400">Mỗi bài</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={perLessonN}
+                    onChange={(e) => setPerLessonN(Math.max(1, Number(e.target.value) || 1))}
+                    className="w-14 rounded-lg border border-slate-200 px-2 py-1 text-center text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => pickPerLesson(perLessonN)}
+                    className="rounded-full bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-primary/10 hover:text-primary"
+                  >
+                    câu ngẫu nhiên
+                  </button>
                   <button
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, questions: [] }))}
@@ -397,6 +512,14 @@ export default function AdminTestsPage() {
                           onChange={(e) => toggleAllInLesson(questions, e.target.checked)}
                         />
                         {lesson.title}
+                        <span className="font-normal text-slate-400">({questions.length} câu)</span>
+                        <button
+                          type="button"
+                          onClick={() => pickPerLesson(perLessonN, lesson._id)}
+                          className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 hover:bg-primary/10 hover:text-primary"
+                        >
+                          Lấy ngẫu nhiên {perLessonN} câu
+                        </button>
                       </label>
                       <div className="mt-1 ml-6 space-y-1">
                         {questions.map((q, idx) => (
@@ -480,49 +603,80 @@ export default function AdminTestsPage() {
           <Spinner />
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
-          {tests.map((test) => (
-            <div
-              key={test._id}
-              className="flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-elevation-1 ring-1 ring-slate-100"
-            >
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 font-display font-bold text-slate-800">
-                  {test.title}
-                  <IdBadge id={test._id} label="KT" always />
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-2 py-0.5 text-caption font-semibold",
-                      test.isActive ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-700"
-                    )}
-                  >
-                    {test.isActive ? "Đang dùng" : "Nháp"}
-                  </span>
-                </p>
-                <p className="text-caption text-slate-500">
-                  {TEST_TYPE_LABEL[test.testType]} · {test.grade?.name} · {test.subject?.name}
-                  {test.chapter?.title ? ` · ${test.chapter.title}` : ` · Học kỳ ${test.semester || 1}`} ·{" "}
-                  {LEVEL_LABEL[test.level]} · {test.questionCount} câu
-                  {test.timeLimitSeconds > 0 ? ` · ${Math.round(test.timeLimitSeconds / 60)} phút` : ""}
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                <Button variant="outline" onClick={() => toggleStatus(test)} title={test.isActive ? "Chuyển sang Nháp" : "Đưa vào sử dụng"}>
-                  {test.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-                <Button variant="outline" onClick={() => startEdit(test)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" onClick={() => handleDelete(test._id)} className="text-red-600 hover:bg-red-50">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+        <div className="mt-4 space-y-4">
+          {groups.map((g) => (
+            <section key={g.key} className="overflow-clip rounded-2xl bg-white shadow-elevation-1 ring-1 ring-slate-100">
+              <button
+                type="button"
+                onClick={() => setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] }))}
+                className="flex w-full items-center gap-2 bg-slate-50 px-4 py-3 text-left"
+              >
+                <ChevronDown className={cn("h-4 w-4 text-slate-400 transition", collapsed[g.key] && "-rotate-90")} />
+                <span className="flex-1 font-display font-black text-slate-800">{g.title}</span>
+                <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-slate-500">{g.items.length} đề</span>
+                <span className="hidden rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700 sm:inline">
+                  {g.items.filter((t) => !t.isActive).length > 0 && `${g.items.filter((t) => !t.isActive).length} nháp`}
+                </span>
+              </button>
+              {!collapsed[g.key] && (
+                <div className="divide-y divide-slate-100">
+                  <div className="hidden grid-cols-[minmax(0,1fr)_80px_80px_160px_190px] gap-3 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-400 xl:grid">
+                    <span>Tên đề · phạm vi</span>
+                    <span>Số câu</span>
+                    <span>Thời gian</span>
+                    <span>Học sinh làm</span>
+                    <span className="text-right">Thao tác</span>
+                  </div>
+                  {g.items.map((test) => {
+                    const st = test.adminStats;
+                    return (
+                      <div key={test._id} className="grid grid-cols-1 items-center gap-x-3 gap-y-1 px-4 py-3 xl:grid-cols-[minmax(0,1fr)_80px_80px_160px_190px]">
+                        <div className="min-w-0">
+                          <p className="flex flex-wrap items-center gap-2 font-bold text-slate-800">
+                            <span className="truncate">{test.title}</span>
+                            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold", test.isActive ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-700")}>
+                              {test.isActive ? "Đang dùng" : "Nháp"}
+                            </span>
+                            {test.questionCount < 8 && <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">Quá ngắn</span>}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {test.chapter?.title || `Học kỳ ${test.semester || 1}`} · {LEVEL_LABEL[test.level]} <IdBadge id={test._id} label="KT" always />
+                          </p>
+                        </div>
+                        <span className={cn("text-sm font-semibold", test.questionCount < 8 ? "text-rose-600" : "text-slate-700")}>{test.questionCount} câu</span>
+                        <span className="text-sm text-slate-600">{test.timeLimitSeconds > 0 ? `${Math.round(test.timeLimitSeconds / 60)} phút` : "Tự do"}</span>
+                        <span className="text-sm text-slate-600">
+                          {st && st.attempts > 0 ? (
+                            <>
+                              <b>{st.attempts}</b> lượt · TB <b className={st.avgPercent >= 80 ? "text-emerald-600" : st.avgPercent >= 50 ? "text-amber-600" : "text-rose-600"}>{st.avgPercent}%</b>
+                            </>
+                          ) : (
+                            <span className="text-slate-300">Chưa có</span>
+                          )}
+                        </span>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="outline" onClick={() => toggleStatus(test)} title={test.isActive ? "Chuyển sang Nháp" : "Đưa vào sử dụng"}>
+                            {test.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button variant="outline" onClick={() => handleDuplicate(test)} title="Nhân bản đề (bản sao ở trạng thái Nháp)">
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" onClick={() => startEdit(test)} title="Sửa đề">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" onClick={() => handleDelete(test._id)} className="text-red-600 hover:bg-red-50" title="Xoá đề">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
           ))}
           {tests.length === 0 && (
-            <p className="rounded-2xl bg-white p-8 text-center text-slate-400 shadow-elevation-1 ring-1 ring-slate-100">
-              Không tìm thấy bài kiểm tra phù hợp.
-            </p>
+            <p className="rounded-2xl bg-white p-8 text-center text-slate-400 shadow-elevation-1 ring-1 ring-slate-100">Không tìm thấy bài kiểm tra phù hợp.</p>
           )}
         </div>
       )}

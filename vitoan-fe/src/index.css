@@ -7,8 +7,19 @@ html,
   height: 100%;
 }
 
+/* Thanh cuộn thống nhất toàn site: thanh của cả trang to hơn, thanh của khung cuộn bên trong (danh sách, chat) mảnh hơn */
+html {
+  scrollbar-width: auto;
+  scrollbar-color: #b6bff5 #eef0ff;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c7cdf5 transparent;
+}
 html {
   overflow-x: clip;
+  /* Luôn chừa chỗ cho thanh cuộn: trang ngắn/dài đều không bị dịch ngang khi chuyển trang. */
+  scrollbar-gutter: stable;
 }
 
 /* Biến đổ bóng cho shadow-elevation-1/2 (xem tailwind.config.js) */
@@ -22,10 +33,22 @@ html {
   --elev-2: 0 0 0 1px rgb(15 23 42 / 0.06), 0 8px 16px -4px rgb(15 23 42 / 0.12);
 }
 
+/* Ngăn kéo menu quản trị trên điện thoại */
+@keyframes admin-drawer-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.admin-drawer {
+  animation: admin-drawer-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 body {
   @apply text-slate-800 antialiased;
-  /* Nền chung mọi trang, cùng tông với trang chủ */
-  background: linear-gradient(180deg, #f0f9ff 0%, #fdf2f8 45%, #f5f3ff 100%) fixed;
+  /* Nền chung mọi trang: hình sticker học đường (chữ, số, ngôi sao, mây…) phủ lên nền gradient pastel */
+  background-color: #f5f3ff;
+  background-image: url("/bg-stickers.svg"), linear-gradient(180deg, #e8f6ff 0%, #fdeef6 45%, #f1edff 100%);
+  background-size: 560px 560px, 100% 100%;
+  background-attachment: fixed, fixed;
   font-family: "Nunito", system-ui, sans-serif;
   overflow-x: clip;
 }
@@ -92,6 +115,16 @@ body {
 .animate-toast-progress {
   transform-origin: left;
   animation: toast-progress linear forwards;
+}
+
+/* Chấm icon của thông báo bật nhẹ khi hiện */
+@keyframes toast-dot-pop {
+  0% { transform: scale(0.4); }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.toast-dot {
+  animation: toast-dot-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.08s both;
 }
 
 /* Owl mascot animations */
@@ -454,3 +487,25 @@ body {
 /* Lơ lửng nhẹ cho hình 3D (trang chủ khách) */
 @keyframes float-soft { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) { [class*="float-soft"] { animation: none !important; } }
+
+/* Màu tên chuyển sắc có ánh chạy (quà "Màu tên") */
+@keyframes name-shine {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+.name-shine {
+  background-size: 200% auto;
+  animation: name-shine 2.5s ease-in-out infinite alternate;
+}
+
+/* Vệt sáng lướt qua thẻ quà Huyền thoại */
+@keyframes reward-shine {
+  0%, 60% { transform: translateX(-120%) skewX(-20deg); }
+  100% { transform: translateX(220%) skewX(-20deg); }
+}
+.reward-shine {
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.75) 50%, transparent 100%);
+  width: 45%;
+  animation: reward-shine 3.2s ease-in-out infinite;
+}

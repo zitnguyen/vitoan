@@ -173,12 +173,13 @@ export default function AdminQuestionsPage() {
     await loadQuestions();
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(similarTo) {
     setError("");
     setGenerating(true);
     try {
-      const res = await questionService.aiGenerate({ lessonId, count: aiCount, difficulty: aiDifficulty });
+      const res = await questionService.aiGenerate({ lessonId, count: similarTo ? 3 : aiCount, difficulty: aiDifficulty, similarTo });
       setAiDrafts(res.data);
+      if (similarTo) window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setError(err.apiMessage || "Không thể tạo câu hỏi bằng AI lúc này");
     } finally {
@@ -248,7 +249,7 @@ export default function AdminQuestionsPage() {
                 ))}
               </select>
             </Field>
-            <Button onClick={handleGenerate} disabled={generating} className="bg-violet-600 hover:bg-violet-700">
+            <Button onClick={() => handleGenerate()} disabled={generating} className="bg-violet-600 hover:bg-violet-700">
               {generating ? "Đang soạn..." : "Soạn câu hỏi"}
             </Button>
           </div>
@@ -455,6 +456,9 @@ export default function AdminQuestionsPage() {
                 )}
               </div>
               <div className="flex shrink-0 gap-1">
+                <IconButton title="AI gợi ý 3 câu tương tự" disabled={generating} onClick={() => handleGenerate(q._id)}>
+                  <Sparkles className="h-4 w-4" />
+                </IconButton>
                 <IconButton title="Sửa câu hỏi" onClick={() => startEdit(q)}>
                   <Pencil className="h-4 w-4" />
                 </IconButton>

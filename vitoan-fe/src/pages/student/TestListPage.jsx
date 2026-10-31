@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { ClipboardCheck, PlayCircle, CheckCircle2, RotateCcw, Clock, Inbox, Divide, BookOpenText, BookMarked } from "../../components/ui/icons.jsx";
+import { Lock, ClipboardCheck, PlayCircle, CheckCircle2, RotateCcw, Clock, Inbox, Divide, BookOpenText, BookMarked } from "../../components/ui/icons.jsx";
 import { subjectService, testService, chapterService } from "../../api/services";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
@@ -16,12 +16,25 @@ const LEVEL_COLOR = {
 };
 const TEST_TYPE_LABEL = { midterm: "Giữa kỳ", final: "Cuối kỳ" };
 
+const LEVEL_ORDER = { easy: 0, medium: 1, hard: 2 };
+// Chủ đề theo thứ tự trong chương trình, cùng chủ đề thì dễ → khó; giữa kỳ trước cuối kỳ, HK1 trước HK2.
+const sortTopic = (a, b) =>
+  (a.chapter?.order ?? 999) - (b.chapter?.order ?? 999) || (LEVEL_ORDER[a.level] ?? 1) - (LEVEL_ORDER[b.level] ?? 1) || a.title.localeCompare(b.title, "vi");
+const sortTerm = (a, b) =>
+  (a.semester || 1) - (b.semester || 1) || (a.testType === b.testType ? 0 : a.testType === "midterm" ? -1 : 1) || a.title.localeCompare(b.title, "vi");
+
 function TestCard({ test }) {
   const completed = !!test.lastAttempt;
+  const locked = !!test.locked;
   return (
     <Link
-      to={`/kiem-tra/${test._id}`}
-      className="group flex items-center gap-4 rounded-2xl bg-white p-5 shadow-elevation-1 transition hover:-translate-y-0.5 hover:shadow-elevation-2 hover:ring-primary/30"
+      to={locked ? "#" : `/kiem-tra/${test._id}`}
+      onClick={(e) => locked && e.preventDefault()}
+      aria-disabled={locked}
+      className={cn(
+        "group flex items-center gap-4 rounded-2xl bg-white p-5 shadow-elevation-1 transition hover:-translate-y-0.5 hover:shadow-elevation-2 hover:ring-primary/30",
+        locked && "cursor-not-allowed opacity-70 hover:translate-y-0"
+      )}
     >
       <span
         className={cn(
@@ -63,6 +76,11 @@ function TestCard({ test }) {
               <Clock className="h-3.5 w-3.5" /> {Math.round(test.timeLimitSeconds / 60)} phút
             </span>
           )}
+          {locked && (
+            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-700">
+              <Lock className="h-3.5 w-3.5" /> Cần học xong {test.learnedLessons}/{test.requiredLessons} bài
+            </span>
+          )}
           {completed && (
             <span className="font-semibold text-primary">
               Cao nhất {test.bestScore}/{test.lastAttempt.totalQuestions} · gần nhất {test.lastAttempt.score}/{test.lastAttempt.totalQuestions}
@@ -73,12 +91,18 @@ function TestCard({ test }) {
       <span
         className={cn(
           "shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold transition",
-          completed
+          locked
+            ? "bg-slate-100 text-slate-400"
+            : completed
             ? "border border-slate-200 text-slate-600 group-hover:border-primary/40 group-hover:text-primary"
             : "bg-primary text-white group-hover:bg-primary-dark"
         )}
       >
-        {completed ? (
+        {locked ? (
+          <span className="flex items-center gap-1">
+            <Lock className="h-3.5 w-3.5" /> Chưa mở
+          </span>
+        ) : completed ? (
           <span className="flex items-center gap-1">
             <RotateCcw className="h-3.5 w-3.5" /> Làm lại
           </span>
@@ -127,8 +151,8 @@ export default function TestListPage() {
       testService.list({ testType: "topic", grade: user.grade._id, subject: activeSubjectId }),
       testService.list({ subject: activeSubjectId, grade: user.grade._id }),
     ]).then(([topicRes, allRes]) => {
-      setTopicTests(topicRes.data);
-      setTermTests(allRes.data.filter((t) => t.testType !== "topic"));
+      setTopicTests([...topicRes.data].sort(sortTopic));
+      setTermTests(allRes.data.filter((t) => t.testType !== "topic").sort(sortTerm));
       setLoading(false);
     });
   }, [user?.grade, activeSubjectId]);

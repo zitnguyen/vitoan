@@ -7,8 +7,10 @@ const StudentBadge = require("../models/StudentBadge");
 const User = require("../models/User");
 const PracticeProgress = require("../models/PracticeProgress");
 const TestAttempt = require("../models/TestAttempt");
+const PracticeSet = require("../models/PracticeSet");
 const { gradeAnswer } = require("../utils/grading");
 const { computeBadgeStats, computeStreak } = require("../utils/badgeStats");
+const { vnDayKey, prevDayKey } = require("../utils/checkin");
 const {
   PASS_PERCENT,
   VIDEO_DONE_RATIO,
@@ -90,11 +92,33 @@ async function submit(req, res, next) {
     if (!lesson || !Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ success: false, message: "Thiếu dữ liệu bài làm" });
     }
-    const questionIds = answers.map((a) => a.question);
-    const questions = await Question.find({ _id: { $in: questionIds } });
+    // Chỉ chấm các câu thuộc đúng bài học (hoặc bài luyện tập) này và mỗi câu một lần —
+    // tránh gửi lặp 1 câu đã biết đáp án để "cày" điểm đổi quà.
+    const lessonDoc = await Lesson.findById(lesson).select("grade");
+    if (!lessonDoc) return res.status(404).json({ success: false, message: "Không tìm thấy bài học" });
+    if (req.user.grade && String(lessonDoc.grade) !== String(req.user.grade._id || req.user.grade)) {
+      return res.status(403).json({ success: false, message: "Bài học này không thuộc lớp em đã chọn" });
+    }
+    const questionFilter = { lesson };
+    if (practiceSet) {
+      const set = await PracticeSet.findById(practiceSet).select("questions");
+      if (!set) return res.status(404).json({ success: false, message: "Không tìm thấy bài luyện tập" });
+      questionFilter._id = { $in: set.questions };
+    }
+    const questions = await Question.find(questionFilter);
     const questionMap = new Map(questions.map((q) => [String(q._id), q]));
+    const seen = new Set();
+    const validAnswers = answers.filter((a) => {
+      const id = String(a.question);
+      if (!questionMap.has(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    if (validAnswers.length === 0) {
+      return res.status(400).json({ success: false, message: "Bài làm không có câu hỏi hợp lệ" });
+    }
 
-    const gradedAnswers = answers.map((a) => {
+    const gradedAnswers = validAnswers.map((a) => {
       const question = questionMap.get(String(a.question));
       const correct = gradeAnswer(question, a);
       return { question: a.question, selectedIndex: a.selectedIndex ?? -1, textAnswer: a.textAnswer || "", correct };
@@ -108,7 +132,7 @@ async function submit(req, res, next) {
       answers: gradedAnswers,
       score,
       totalQuestions: gradedAnswers.length,
-      durationSeconds: durationSeconds || 0,
+      durationSeconds: Math.max(0, Math.min(Number(durationSeconds) || 0, 6 * 3600)),
     });
 
     const { points: pointsEarned, previousBest, hadPerfect } = await practicePointsEarned(req.user._id, attempt);
@@ -187,7 +211,14 @@ async function myProgressList(req, res, next) {
     const list = await PracticeProgress.find({ student: req.user._id })
       .sort({ updatedAt: -1 })
       .limit(20)
-      .populate("lesson", "title subject grade chapter")
+      .populate({
+        path: "lesson",
+        select: "title subject grade chapter",
+        populate: [
+          { path: "subject", select: "name slug" },
+          { path: "chapter", select: "title" },
+        ],
+      })
       .populate("practiceSet", "title");
     res.json({
       success: true,
@@ -392,7 +423,8 @@ async function myHistory(req, res, next) {
       .populate("practiceSet", "title")
       .sort({ createdAt: -1 })
       .limit(50);
-    res.json({ success: true, data: attempts });
+    const total = await Attempt.countDocuments({ student: req.user._id });
+    res.json({ success: true, data: attempts, total });
   } catch (err) {
     next(err);
   }
@@ -429,25 +461,23 @@ async function stats(req, res, next) {
       avgPercent: v.total ? Math.round((v.correct / v.total) * 100) : 0,
     }));
 
-    const days = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      d.setDate(d.getDate() - i);
-      days.push(d);
+    // 14 ngày gần nhất theo giờ Việt Nam (không phụ thuộc múi giờ máy chủ).
+    const attemptsByDay = new Map();
+    for (const a of attempts) {
+      const key = vnDayKey(a.createdAt);
+      const list = attemptsByDay.get(key) || [];
+      list.push(a);
+      attemptsByDay.set(key, list);
     }
-    const byDate = days.map((d) => {
-      const next = new Date(d);
-      next.setDate(next.getDate() + 1);
-      const dayAttempts = attempts.filter((a) => a.createdAt >= d && a.createdAt < next);
+    const byDate = [];
+    let key = vnDayKey();
+    for (let i = 0; i < 14; i++) {
+      const dayAttempts = attemptsByDay.get(key) || [];
       const correct = dayAttempts.reduce((sum, a) => sum + a.score, 0);
       const total = dayAttempts.reduce((sum, a) => sum + a.totalQuestions, 0);
-      return {
-        date: d.toISOString().slice(0, 10),
-        attempts: dayAttempts.length,
-        avgPercent: total ? Math.round((correct / total) * 100) : 0,
-      };
-    });
+      byDate.unshift({ date: key, attempts: dayAttempts.length, avgPercent: total ? Math.round((correct / total) * 100) : 0 });
+      key = prevDayKey(key);
+    }
 
     res.json({ success: true, data: { totalAttempts, avgPercent, streak, bySubject, byDate } });
   } catch (err) {

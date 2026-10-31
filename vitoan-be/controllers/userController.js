@@ -1,3 +1,4 @@
+const { escapeRegExp } = require("../utils/regex");
 const User = require("../models/User");
 const Attempt = require("../models/Attempt");
 const Question = require("../models/Question");
@@ -55,7 +56,7 @@ async function list(req, res, next) {
     if (req.query.grade) filter.grade = req.query.grade;
     if (req.query.status) filter.status = req.query.status;
     if (req.query.search) {
-      const regex = new RegExp(req.query.search.trim(), "i");
+      const regex = new RegExp(escapeRegExp(req.query.search.trim()), "i");
       filter.$or = [{ fullName: regex }, { email: regex }, { username: regex }, { phone: regex }];
     }
     const users = await User.find(filter).populate("grade", "name").sort({ createdAt: -1 });
@@ -286,7 +287,7 @@ async function publicLeaderboard(req, res, next) {
       // Không công khai ảnh do học sinh tự tải lên (có thể là ảnh thật của trẻ) — chỉ giữ avatar hoạt hình.
       .map((s) => ({
         name: publicName(s.fullName),
-        avatarUrl: /^https:\/\/api\.dicebear\.com\//.test(s.avatarUrl || "") ? s.avatarUrl : "",
+        avatarUrl: /^(https:\/\/api\.dicebear\.com\/|owl:[0-7]$)/.test(s.avatarUrl || "") ? s.avatarUrl : "",
         score: scoreByStudent.get(String(s._id)) || 0,
       }))
       .filter((r) => r.score > 0)

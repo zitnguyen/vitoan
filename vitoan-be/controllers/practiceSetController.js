@@ -1,16 +1,18 @@
+const { escapeRegExp } = require("../utils/regex");
+const { dedupeQuestions } = require("../utils/dedupe");
 const PracticeSet = require("../models/PracticeSet");
 const Lesson = require("../models/Lesson");
 const Attempt = require("../models/Attempt");
 
 function stripQuestion(question) {
-  const { _id, type, text, audioText, imageUrl, choices, difficulty, order } = question;
-  return { _id, type, text, audioText, imageUrl, choices, difficulty, order };
+  const { _id, type, text, audioText, imageUrl, choices, difficulty, order, source } = question;
+  return { _id, type, text, audioText, imageUrl, choices, difficulty, order, source };
 }
 
 async function list(req, res, next) {
   try {
     const filter = {};
-    if (req.query.search) filter.title = new RegExp(req.query.search.trim(), "i");
+    if (req.query.search) filter.title = new RegExp(escapeRegExp(req.query.search.trim()), "i");
     if (req.query.level) filter.level = req.query.level;
     if (req.query.status === "draft") filter.isPublished = false;
     else if (req.query.status === "published") filter.isPublished = true;
@@ -125,7 +127,7 @@ async function getOne(req, res, next) {
         level: set.level,
         timeLimitSeconds: set.timeLimitSeconds,
         isPublished: set.isPublished,
-        questions: isAdmin ? set.questions : set.questions.map(stripQuestion),
+        questions: isAdmin ? set.questions : dedupeQuestions(set.questions).map(stripQuestion),
       },
     });
   } catch (err) {

@@ -28,6 +28,11 @@ import TestListPage from "./pages/student/TestListPage.jsx";
 import TestTakingPage from "./pages/student/TestTakingPage.jsx";
 import TestResultPage from "./pages/student/TestResultPage.jsx";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage.jsx";
+import AdminCatalogPage from "./pages/admin/AdminCatalogPage.jsx";
+import AdminCommentsPage from "./pages/admin/AdminCommentsPage.jsx";
+import AdminRedemptionsPage from "./pages/admin/AdminRedemptionsPage.jsx";
+import AdminBroadcastPage from "./pages/admin/AdminBroadcastPage.jsx";
+import AdminArenaPage from "./pages/admin/AdminArenaPage.jsx";
 import AdminLessonsPage from "./pages/admin/AdminLessonsPage.jsx";
 import AdminQuestionsPage from "./pages/admin/AdminQuestionsPage.jsx";
 import AdminPracticeSetsPage from "./pages/admin/AdminPracticeSetsPage.jsx";
@@ -36,9 +41,14 @@ import AdminQuestionBankPage from "./pages/admin/AdminQuestionBankPage.jsx";
 import AdminTestsPage from "./pages/admin/AdminTestsPage.jsx";
 import AdminAccountsPage from "./pages/admin/AdminAccountsPage.jsx";
 import AdminRewardsPage from "./pages/admin/AdminRewardsPage.jsx";
+import AdminMissionsPage from "./pages/admin/AdminMissionsPage.jsx";
+import AdminReportPage from "./pages/admin/AdminReportPage.jsx";
+import AdminBadgesPage from "./pages/admin/AdminBadgesPage.jsx";
 import AdminNewsPage from "./pages/admin/AdminNewsPage.jsx";
 import NotFoundPage from "./pages/common/NotFoundPage.jsx";
 import MissionsPage from "./pages/student/MissionsPage.jsx";
+import ReviewMistakesPage from "./pages/student/ReviewMistakesPage.jsx";
+import ArenaPage from "./pages/student/ArenaPage.jsx";
 import RewardsPage from "./pages/student/RewardsPage.jsx";
 
 function GradeDefaultRedirect() {
@@ -68,7 +78,7 @@ export default function App() {
     <div className="flex min-h-screen flex-col">
       <ScrollToTop />
       {!hideChrome && <SiteHeader />}
-      <main className="flex-1">
+      <main className="min-h-[75vh] flex-1">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/lop/:gradeSlug" element={<GradeDefaultRedirect />} />
@@ -186,7 +196,22 @@ export default function App() {
             }
           />
           {/* Các trang chưa làm (Đấu trường, Khoá học, Liên hệ) đã bỏ — link cũ quay về trang chủ */}
-          <Route path="/dau-truong" element={<Navigate to="/" replace />} />
+          <Route
+            path="/on-lai-cau-sai"
+            element={
+              <ProtectedRoute allowedRoles={["Student"]}>
+                <ReviewMistakesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dau-truong"
+            element={
+              <ProtectedRoute allowedRoles={["Student"]}>
+                <ArenaPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/mua-khoa-hoc" element={<Navigate to="/" replace />} />
           <Route path="/lien-he" element={<Navigate to="/" replace />} />
           <Route
@@ -289,10 +314,74 @@ export default function App() {
             }
           />
           <Route
+            path="/admin/bao-cao"
+            element={
+              <AdminLayout>
+                <AdminReportPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/huy-hieu"
+            element={
+              <AdminLayout>
+                <AdminBadgesPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/nhiem-vu"
+            element={
+              <AdminLayout>
+                <AdminMissionsPage />
+              </AdminLayout>
+            }
+          />
+          <Route
             path="/admin/doi-diem"
             element={
               <AdminLayout>
                 <AdminRewardsPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/lop-mon"
+            element={
+              <AdminLayout>
+                <AdminCatalogPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/binh-luan"
+            element={
+              <AdminLayout>
+                <AdminCommentsPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/don-doi-qua"
+            element={
+              <AdminLayout>
+                <AdminRedemptionsPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/thong-bao"
+            element={
+              <AdminLayout>
+                <AdminBroadcastPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/dau-truong"
+            element={
+              <AdminLayout>
+                <AdminArenaPage />
               </AdminLayout>
             }
           />

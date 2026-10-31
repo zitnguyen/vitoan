@@ -103,7 +103,7 @@ export default function AdminLessonHeader({ lesson, active, version = 0 }) {
         </div>
       </div>
 
-      <div className="mt-4 flex gap-1 border-b border-slate-200">
+      <div className="mt-4 flex gap-1 overflow-x-auto border-b border-slate-200 [&>a]:shrink-0 [&>a]:whitespace-nowrap max-sm:[&>a]:px-3">
         {TABS.map((t) => (
           <NavLink
             key={t.key}

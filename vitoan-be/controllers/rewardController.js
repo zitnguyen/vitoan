@@ -105,6 +105,7 @@ async function redeem(req, res, next) {
       student: req.user._id,
       reward: reward._id,
       pointsSpent: reward.costPoints,
+      status: reward.type === "other" ? "pending" : "done",
     });
 
     // Đổi xong là dùng luôn cho bé thấy ngay; VIP thì cộng dồn thời hạn.

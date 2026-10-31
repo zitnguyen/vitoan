@@ -13,9 +13,7 @@ vitoan-fe/.envnguyen
 # Runtime/user-uploaded content — not source code.
 vitoan-be/uploads/
 
-# Local DB export — contains real user data (password hashes, tokens).
-# Transfer it to the server directly instead of committing it.
-vitoan_db_dump/
+# DB dump đã làm sạch (mật khẩu = 123456, email giả) được commit để dựng lại demo.
 
 .DS_Store
 *.log

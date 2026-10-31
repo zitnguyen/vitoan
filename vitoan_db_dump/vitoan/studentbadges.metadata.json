@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"student":{"$numberInt":"1"},"badge":{"$numberInt":"1"}},"name":"student_1_badge_1","unique":true}],"uuid":"8abee4d557674c3997e83bf7f79c9752","collectionName":"studentbadges","type":"collection"}

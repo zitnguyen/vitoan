@@ -16,7 +16,9 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import { gradeService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
+import { cn } from "../../lib/utils";
 import UserAvatar from "../../components/common/UserAvatar.jsx";
+import { OWLS, OwlAvatarArt, owlIndexFor } from "../../lib/owls.jsx";
 import UserName from "../../components/common/UserName.jsx";
 import { Img3D } from "../../lib/icons3d.jsx";
 
@@ -70,7 +72,7 @@ function compressImage(file, maxSize = 512, quality = 0.85) {
 }
 
 export default function ProfilePage() {
-  const { user, updateProfile, uploadAvatar, setGrade } = useAuth();
+  const { user, updateProfile, uploadAvatar, setGrade, updatePreferences } = useAuth();
   const toast = useToast();
   const fileInputRef = useRef(null);
   const [form, setForm] = useState({
@@ -203,6 +205,36 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Chọn cú đại diện */}
+      {user?.role === "Student" && (
+        <div className="mt-6 rounded-3xl bg-white p-6 shadow-elevation-1 sm:p-8">
+          <h2 className="font-display text-xl font-black text-slate-800">Chọn cú đại diện của em</h2>
+          <p className="mt-1 text-slate-500">Em có thể dùng cú dễ thương dưới đây, hoặc bấm máy ảnh ở trên để tải ảnh của mình.</p>
+          <div className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-8">
+            {OWLS.map((o, i) => {
+              const selected = user.avatarUrl === `owl:${i}` || (!user.avatarUrl && owlIndexFor(user) === i);
+              return (
+                <button
+                  key={o.name}
+                  type="button"
+                  onClick={() => updatePreferences({ avatarUrl: `owl:${i}` }).catch(() => {})}
+                  title={o.name}
+                  className={cn("group flex flex-col items-center gap-1.5 rounded-2xl p-1.5 transition hover:-translate-y-0.5", selected && "bg-primary/10 ring-2 ring-primary")}
+                >
+                  <OwlAvatarArt idx={i} className="h-16 w-16 rounded-full shadow-sm" />
+                  <span className="text-center text-xs font-bold leading-tight text-slate-600">{o.name}</span>
+                </button>
+              );
+            })}
+          </div>
+          {user.avatarUrl && (
+            <button type="button" onClick={() => updatePreferences({ avatarUrl: "" }).catch(() => {})} className="mt-4 text-sm font-bold text-primary hover:underline">
+              Để ViToan tự chọn cú cho em
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Grade card */}
       {user?.role === "Student" && (

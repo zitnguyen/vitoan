@@ -56,6 +56,7 @@ function AttemptCard({ attempt, subtitle, to, accent }) {
 export default function HistoryPage() {
   const [attempts, setAttempts] = useState([]);
   const [testAttempts, setTestAttempts] = useState([]);
+  const [totals, setTotals] = useState({ practice: 0, tests: 0 });
   const [badges, setBadges] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -63,6 +64,7 @@ export default function HistoryPage() {
     Promise.all([attemptService.myHistory(), badgeService.myBadges(), testAttemptService.myHistory()]).then(
       ([historyRes, badgesRes, testHistoryRes]) => {
         setAttempts(historyRes.data);
+        setTotals({ practice: historyRes.total ?? historyRes.data.length, tests: testHistoryRes.total ?? testHistoryRes.data.length });
         setBadges(badgesRes.data);
         setTestAttempts(testHistoryRes.data);
         setLoading(false);
@@ -72,14 +74,14 @@ export default function HistoryPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex min-h-[70vh] items-center justify-center">
         <Spinner />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
+    <div>
       <div className="page">
         <PageHeader
           icon={History}
@@ -88,8 +90,8 @@ export default function HistoryPage() {
           subtitle="Xem lại kết quả các lượt luyện tập và kiểm tra"
           right={
             <>
-              <HeaderStat icon={BookOpen} value={attempts.length} label="luyện tập" />
-              <HeaderStat icon={ClipboardCheck} value={testAttempts.length} label="kiểm tra" />
+              <HeaderStat icon={BookOpen} value={totals.practice} label="luyện tập" />
+              <HeaderStat icon={ClipboardCheck} value={totals.tests} label="kiểm tra" />
               <HeaderStat icon={Award} value={badges.length} label="huy hiệu" />
             </>
           }
@@ -123,10 +125,10 @@ export default function HistoryPage() {
           )}
         </section>
 
-        <div className="mt-5 grid gap-8 lg:grid-cols-2">
+        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-2">
           <section>
             <h2 className="section-title">
-              <BookOpen className="h-5 w-5 text-primary" /> Các lượt luyện tập
+              <BookOpen className="h-5 w-5 text-primary" /> Các lượt luyện tập{totals.practice > attempts.length && <span className="ml-2 text-sm font-semibold text-slate-400">({attempts.length} lần gần nhất)</span>}
             </h2>
             {attempts.length === 0 ? (
               <div className="mt-4">

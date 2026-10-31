@@ -45,7 +45,7 @@ export default function NewsDetailPage() {
   const date = new Date(article.publishedAt);
 
   return (
-    <div className="min-h-screen">
+    <div>
       <div className="page">
         <Link to="/tin-tuc" className="inline-flex items-center gap-1 font-bold text-secondary hover:underline">
           <ChevronLeft className="h-4 w-4" /> Tin tức

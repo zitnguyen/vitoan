@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"subject":{"$numberInt":"1"},"grade":{"$numberInt":"1"},"order":{"$numberInt":"1"}},"name":"subject_1_grade_1_order_1"}],"uuid":"e39636cc47be4e6a9ffaa932a90e42a7","collectionName":"lessons","type":"collection"}

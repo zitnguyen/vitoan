@@ -9,6 +9,7 @@ const {
   resetPassword,
   setGrade,
   updateProfile,
+  updatePreferences,
   uploadAvatar,
   changePassword,
   refresh,
@@ -29,6 +30,7 @@ router.post("/verify-reset-code", verifyResetCode);
 router.post("/reset-password", resetPassword);
 router.post("/grade", protect, setGrade);
 router.put("/profile", protect, updateProfile);
+router.put("/preferences", protect, updatePreferences);
 router.post("/avatar", protect, (req, res, next) => {
   uploadAvatarMiddleware.single("avatar")(req, res, (err) => {
     if (err) {

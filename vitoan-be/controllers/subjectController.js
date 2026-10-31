@@ -1,4 +1,5 @@
 const Subject = require("../models/Subject");
+const Chapter = require("../models/Chapter");
 
 async function list(req, res, next) {
   try {
@@ -30,6 +31,8 @@ async function update(req, res, next) {
 
 async function remove(req, res, next) {
   try {
+    const used = await Chapter.countDocuments({ subject: req.params.id });
+    if (used) return res.status(400).json({ success: false, message: `Môn này còn ${used} chương học, không thể xoá.` });
     await Subject.findByIdAndDelete(req.params.id);
     res.json({ success: true, data: null });
   } catch (err) {

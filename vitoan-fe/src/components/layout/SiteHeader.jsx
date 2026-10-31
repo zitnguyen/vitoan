@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Home,
   ChevronDown,
-  Check,
+  ChevronLeft,
   User,
   History,
   ShieldCheck,
@@ -18,7 +18,8 @@ import {
   Menu,
   X,
   Bot,
-  Medal,
+  Award,
+  Gamepad2,
   BarChart3,
 } from "../ui/icons.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -26,6 +27,7 @@ import { gradeService } from "../../api/services";
 import OwlMascot from "../illustrations/OwlMascot.jsx";
 import { cn } from "../../lib/utils";
 import UserAvatar from "../common/UserAvatar.jsx";
+import NotificationBell from "./NotificationBell.jsx";
 import UserName from "../common/UserName.jsx";
 
 const NAV_LINKS = [{ to: "/", label: "Trang chủ" }, { to: "/#vi-sao", label: "Vì sao chọn ViToan" }];
@@ -34,15 +36,16 @@ const GUEST_LINKS = [
   { to: "/#chon-lop", label: "Chương trình học" },
   { to: "/#vinh-danh", label: "Bảng vàng" },
   { to: "/#lo-trinh", label: "Lộ trình" },
-  { to: "/#vi-sao", label: "Vì sao chọn ViToan" },
+  { to: "/#vi-sao", label: "Vì sao chọn" },
   { to: "/tin-tuc", label: "Tin tức" },
 ];
 
 // Menu chính khi đã đăng nhập (đã gộp các mục của "Khám phá" cũ vào đây)
 const TOP_NAV_ITEMS = [
   { to: "/nhiem-vu", label: "Nhiệm vụ", Icon: Target, color: "text-violet-500" },
-  { to: "/thanh-tich", label: "Thành tích", Icon: Trophy, color: "text-amber-500" },
-  { to: "/xep-hang", label: "Xếp hạng", Icon: Medal, color: "text-amber-500" },
+  { to: "/thanh-tich", label: "Thành tích", Icon: Award, color: "text-amber-500" },
+  { to: "/dau-truong", label: "Đấu trường", Icon: Gamepad2, color: "text-rose-500" },
+  { to: "/xep-hang", label: "Xếp hạng", Icon: Trophy, color: "text-amber-500" },
   { to: "/thong-ke", label: "Thống kê", Icon: BarChart3, color: "text-secondary" },
   { to: "/doi-qua", label: "Đổi quà", Icon: Gift, color: "text-pink-500" },
   { to: "/ban-dong-hanh", label: "Bạn đồng hành", Icon: Bot, color: "text-primary" },
@@ -51,10 +54,21 @@ const TOP_NAV_ITEMS = [
 
 const MAIN_NAV_ITEMS = TOP_NAV_ITEMS;
 
+// Mục menu chính: đang mở thì nền xanh chữ trắng, rê chuột nền xanh nhạt, bấm thì lún nhẹ
+const navItemClass = (active) =>
+  cn(
+    "flex select-none items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-2 font-bold transition duration-150 active:scale-95",
+    active
+      ? "bg-primary text-white shadow-[0_6px_14px_-6px_rgba(0,177,79,0.75)]"
+      : "text-slate-600 hover:bg-primary/10 hover:text-primary active:bg-primary/20"
+  );
+
 // Màu số lớp (giống trang "Chọn lớp")
 const GRADE_NUM = ["from-emerald-400 to-green-500", "from-sky-400 to-blue-500", "from-amber-400 to-orange-500", "from-violet-400 to-purple-500", "from-pink-400 to-rose-500"];
 
 function GradesDropdown({ activeGrade }) {
+  const { pathname } = useLocation();
+  const inLearning = /^\/(lop|bai|luyen-tap)\b/.test(pathname);
   const [open, setOpen] = useState(false);
   const [grades, setGrades] = useState([]);
   const ref = useRef(null);
@@ -72,17 +86,14 @@ function GradesDropdown({ activeGrade }) {
   }, []);
 
   return (
-    <div ref={ref} className="relative flex items-center gap-0.5">
+    <div ref={ref} className="relative">
+      <div className={cn(navItemClass(inLearning || open), "gap-0.5 pr-1.5")}>
       {activeGrade ? (
-        <Link to={`/lop/${activeGrade.slug}/toan`} className="whitespace-nowrap font-semibold text-slate-600 hover:text-primary">
+        <Link to={`/lop/${activeGrade.slug}/toan`} className="whitespace-nowrap">
           Vào học
         </Link>
       ) : (
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="whitespace-nowrap font-semibold text-slate-600 hover:text-primary"
-        >
+        <button type="button" onClick={() => setOpen((o) => !o)} className="whitespace-nowrap">
           Vào học
         </button>
       )}
@@ -90,15 +101,16 @@ function GradesDropdown({ activeGrade }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label="Đổi lớp"
-        className="flex items-center p-0.5 text-slate-400 hover:text-primary"
+        className={cn("flex items-center rounded-full p-0.5", inLearning || open ? "text-white/90" : "text-slate-400")}
       >
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
+      </div>
       {open && (
-        <div className="absolute left-1/2 top-full mt-3 w-80 -translate-x-1/2 rounded-[1.5rem] bg-white p-4 shadow-[0_24px_60px_-20px_rgba(11,35,64,0.45)]">
-          <p className="px-2 pb-3 text-xs font-black uppercase tracking-wider text-slate-400">Chọn lớp để vào học</p>
-          <div className="grid grid-cols-2 gap-2">
-            {grades.map((grade, idx) => {
+        <div className="absolute left-1/2 top-full mt-2 w-64 -translate-x-1/2 rounded-2xl bg-white p-2.5 shadow-[0_24px_60px_-20px_rgba(11,35,64,0.45)]">
+          <p className="px-1.5 pb-2 text-xs font-black uppercase tracking-wider text-slate-400">Chọn lớp để vào học</p>
+          <div className="grid grid-cols-3 gap-1">
+            {grades.filter((g) => !activeGrade || g._id === activeGrade._id).map((grade, idx) => {
               const num = GRADE_NUM[idx % GRADE_NUM.length];
               const isActive = activeGrade?._id === grade._id;
               return (
@@ -107,15 +119,14 @@ function GradesDropdown({ activeGrade }) {
                   to={`/lop/${grade.slug}/toan`}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    "flex items-center gap-2.5 rounded-2xl p-2 transition hover:bg-slate-50",
+                    "flex flex-col items-center gap-1 rounded-xl p-1.5 transition hover:bg-slate-50",
                     isActive && "bg-primary/10 ring-2 ring-primary/30"
                   )}
                 >
-                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-display text-lg font-black text-white shadow ${num}`}>
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-display text-base font-black text-white shadow ${num}`}>
                     {grade.order || idx + 1}
                   </span>
-                  <span className="flex-1 font-display font-black text-slate-800">{grade.name}</span>
-                  {isActive && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                  <span className="text-xs font-bold text-slate-700">{grade.name}</span>
                 </Link>
               );
             })}
@@ -196,6 +207,7 @@ function UserMenu({ user, onLogout }) {
 
 function MobileMenu({ user, onLogout, onClose }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [grades, setGrades] = useState([]);
 
   useEffect(() => {
@@ -208,7 +220,7 @@ function MobileMenu({ user, onLogout, onClose }) {
   }
 
   const itemClass =
-    "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-primary";
+    "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition duration-150 hover:bg-primary/10 hover:text-primary active:scale-[0.98]";
   const TILE_BG = ["bg-violet-50", "bg-amber-50", "bg-orange-50", "bg-sky-50", "bg-pink-50", "bg-emerald-50", "bg-teal-50"];
 
   return (
@@ -225,7 +237,7 @@ function MobileMenu({ user, onLogout, onClose }) {
               key={grade._id}
               type="button"
               onClick={() => go(`/lop/${grade.slug}/toan`)}
-              className="flex flex-col items-center gap-1 rounded-2xl p-2 transition hover:bg-slate-50"
+              className="flex flex-col items-center gap-1 rounded-2xl p-2 transition duration-150 hover:bg-slate-50 active:scale-95"
             >
               <span className={`flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br font-display text-xl font-black text-white shadow ${GRADE_NUM[idx % GRADE_NUM.length]}`}>
                 {grade.order || idx + 1}
@@ -244,7 +256,11 @@ function MobileMenu({ user, onLogout, onClose }) {
                   key={item.to}
                   type="button"
                   onClick={() => go(item.to)}
-                  className={cn("flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-center transition hover:-translate-y-0.5", TILE_BG[i % TILE_BG.length])}
+                  className={cn(
+                    "flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-center transition duration-150 hover:-translate-y-0.5 active:scale-95",
+                    TILE_BG[i % TILE_BG.length],
+                    pathname.startsWith(item.to) && "ring-2 ring-primary"
+                  )}
                 >
                   <item.Icon className="h-9 w-9" />
                   <span className="text-xs font-black leading-tight text-slate-700">{item.label}</span>
@@ -335,11 +351,11 @@ export default function SiteHeader() {
         // trang khác thì dính trên cùng. Đã đăng nhập: thanh menu đầy đủ.
         !user && "px-3 pt-3 sm:px-6",
         guestLanding ? "fixed inset-x-0 top-0" : "sticky top-0",
-        user && "border-b border-slate-200/70 bg-white/95 shadow-[0_6px_20px_-14px_rgba(11,35,64,0.35)] backdrop-blur"
+        user && "border-b border-white/60 bg-white/55 shadow-[0_8px_30px_-18px_rgba(11,35,64,0.35)] backdrop-blur-xl backdrop-saturate-150"
       )}
     >
       {/* ===== Top utility bar (chỉ khi đã đăng nhập) ===== */}
-      <div className={cn("hidden border-b border-slate-100", user && "md:block")}>
+      <div className="hidden">
         <div className="mx-auto flex max-w-6xl xl:max-w-none xl:px-10 2xl:px-16 items-center justify-between px-4 py-1.5 sm:px-6 text-caption text-slate-500">
           <div className="flex items-center gap-5">
             <a href="mailto:support@vitoan.edu.vn" className="flex items-center gap-1.5 hover:text-primary">
@@ -366,10 +382,25 @@ export default function SiteHeader() {
         className={cn(
           "mx-auto flex items-center justify-between gap-2 px-3 py-2 sm:gap-5 sm:px-6",
           !user
-            ? "max-w-7xl rounded-full bg-white/90 shadow-[0_8px_30px_-12px_rgba(11,35,64,0.3)] backdrop-blur"
+            ? "max-w-7xl rounded-full border border-white/60 bg-white/60 shadow-[0_8px_30px_-12px_rgba(11,35,64,0.3)] backdrop-blur-xl backdrop-saturate-150"
             : "max-w-6xl xl:max-w-none xl:px-10 2xl:px-16"
         )}
       >
+        {/* Luôn giữ chỗ cho nút lùi (ẩn ở trang chủ) để thanh menu không bị dịch khi đổi trang */}
+        <button
+          type="button"
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/"))}
+          title="Quay lại trang trước"
+          aria-label="Quay lại trang trước"
+          tabIndex={pathname === "/" ? -1 : 0}
+          aria-hidden={pathname === "/"}
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/70 text-slate-600 transition hover:bg-primary/10 hover:text-primary active:scale-95",
+            pathname === "/" && "invisible"
+          )}
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
         <Link to="/" className="group flex shrink-0 items-center gap-2">
           <OwlMascot
             className="h-10 w-10 shrink-0 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110"
@@ -379,41 +410,41 @@ export default function SiteHeader() {
             <span className="font-display text-2xl font-black text-ink">
               Vi<span className="text-primary">Toan</span>
             </span>
-            <span className="mt-0.5 hidden text-[11px] font-extrabold tracking-wide text-secondary sm:block">Toán &amp; Tiếng Việt cho bé ✏️</span>
+            <span className="mt-0.5 hidden text-xs font-extrabold tracking-wide text-secondary min-[1900px]:block">Toán &amp; Tiếng Việt cho bé ✏️</span>
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-1 text-xs xl:flex 2xl:gap-1.5 2xl:text-sm">
-          <a href={NAV_LINKS[0].to} className="whitespace-nowrap rounded-full px-2.5 py-1.5 font-bold text-slate-600 transition hover:bg-slate-100 hover:text-primary">
-            {NAV_LINKS[0].label}
-          </a>
-          <GradesDropdown activeGrade={user?.grade} />
-          {user &&
-            TOP_NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 font-bold transition",
-                    isActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-100 hover:text-primary"
-                  )
-                }
-              >
-                <item.Icon className="hidden h-5 w-5 shrink-0 2xl:block" /> {item.label}
-              </NavLink>
-            ))}
-          {!user &&
-            GUEST_LINKS.map((l) => (
-              <a key={l.to} href={l.to} className="whitespace-nowrap font-bold text-slate-600 hover:text-primary">
+        {/* Khách: menu cùng hàng với logo. Đã đăng nhập: menu đầy đủ ở hàng riêng bên dưới (xem cuối header) */}
+        {!user ? (
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 text-sm xl:flex 2xl:gap-1.5 2xl:text-base">
+            <NavLink to="/" end className={({ isActive }) => navItemClass(isActive)}>
+              {NAV_LINKS[0].label}
+            </NavLink>
+            {GUEST_LINKS.map((l) => (
+              <a key={l.to} href={l.to} className={navItemClass(false)}>
                 {l.label}
               </a>
             ))}
-        </nav>
+          </nav>
+        ) : (
+          <div className="flex-1" />
+        )}
 
         <div className="flex items-center gap-2 text-sm sm:gap-3">
           {user ? (
-            <UserMenu user={user} onLogout={handleLogout} />
+            <>
+              {user.role === "Student" && (
+                <Link
+                  to="/doi-qua"
+                  title="Điểm thưởng — bấm để đổi quà"
+                  className="hidden items-center gap-1.5 rounded-full bg-white/70 px-3 py-1.5 font-display text-base font-black text-sky-600 transition hover:bg-white sm:flex"
+                >
+                  <Gem className="h-5 w-5" /> {(user.points ?? 0).toLocaleString("vi-VN")}
+                </Link>
+              )}
+              {user.role === "Student" && <NotificationBell />}
+              <UserMenu user={user} onLogout={handleLogout} />
+            </>
           ) : (
             <>
               <Link
@@ -441,6 +472,23 @@ export default function SiteHeader() {
           </button>
         </div>
       </div>
+
+      {/* ===== Hàng menu đầy đủ (đã đăng nhập, máy tính): mọi mục đều hiện, chữ lớn, không gom vào "Thêm" ===== */}
+      {user && (
+        <div className="hidden border-t border-white/50 xl:block">
+          <nav className="mx-auto flex max-w-6xl items-center justify-center gap-1 px-4 py-1.5 text-base xl:max-w-none xl:px-10 2xl:gap-2 2xl:px-16 2xl:text-[17px]">
+            <NavLink to="/" end className={({ isActive }) => navItemClass(isActive)}>
+              {NAV_LINKS[0].label}
+            </NavLink>
+            <GradesDropdown activeGrade={user?.grade} />
+            {TOP_NAV_ITEMS.map((item) => (
+              <NavLink key={item.to} to={item.to} className={({ isActive }) => navItemClass(isActive)}>
+                <item.Icon className="hidden h-6 w-6 shrink-0 min-[1500px]:block" /> {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+      )}
 
       {mobileOpen && <MobileMenu user={user} onLogout={handleLogout} onClose={() => setMobileOpen(false)} />}
     </header>

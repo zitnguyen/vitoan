@@ -117,7 +117,7 @@ export default function AdminReviewContentPage() {
     <AdminPage>
       <AdminLessonHeader lesson={lesson} active="on-tap" version={version} />
 
-      <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-[1fr_420px]">
+      <form onSubmit={handleSubmit} className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[1fr_420px]">
         <Card className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-display text-h3 text-slate-800">Kiến thức cần nhớ</p>

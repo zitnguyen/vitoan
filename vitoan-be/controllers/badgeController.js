@@ -16,6 +16,12 @@ async function list(req, res, next) {
     const filter = {};
     if (!req.user || req.user.role !== "Admin") filter.isActive = true;
     const badges = await Badge.find(filter).sort({ createdAt: -1 });
+    if (req.user && req.user.role === "Admin") {
+      // Quản trị viên xem thêm số học sinh đã đạt từng huy hiệu để biết huy hiệu quá dễ/khó.
+      const counts = await StudentBadge.aggregate([{ $group: { _id: "$badge", n: { $sum: 1 } } }]);
+      const byBadge = new Map(counts.map((c) => [String(c._id), c.n]));
+      return res.json({ success: true, data: badges.map((b) => ({ ...b.toObject(), earnedCount: byBadge.get(String(b._id)) || 0 })) });
+    }
     res.json({ success: true, data: badges });
   } catch (err) {
     next(err);

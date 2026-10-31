@@ -8,15 +8,22 @@ export const authService = {
   resetPassword: (payload) => axiosClient.post("/auth/reset-password", payload),
   setGrade: (grade) => axiosClient.post("/auth/grade", { grade }),
   updateProfile: (payload) => axiosClient.put("/auth/profile", payload),
+  updatePreferences: (payload) => axiosClient.put("/auth/preferences", payload),
   changePassword: (payload) => axiosClient.put("/auth/change-password", payload),
 };
 
 export const gradeService = {
   list: () => axiosClient.get("/grades"),
+  create: (payload) => axiosClient.post("/grades", payload),
+  update: (id, payload) => axiosClient.put(`/grades/${id}`, payload),
+  remove: (id) => axiosClient.delete(`/grades/${id}`),
 };
 
 export const subjectService = {
   list: () => axiosClient.get("/subjects"),
+  create: (payload) => axiosClient.post("/subjects", payload),
+  update: (id, payload) => axiosClient.put(`/subjects/${id}`, payload),
+  remove: (id) => axiosClient.delete(`/subjects/${id}`),
 };
 
 export const chapterService = {
@@ -41,9 +48,12 @@ export const questionService = {
   checkAnswer: (id, payload) => axiosClient.post(`/questions/${id}/check`, payload),
   getHint: (id) => axiosClient.post(`/questions/${id}/hint`),
   aiGenerate: (payload) => axiosClient.post("/questions/ai-generate", payload),
+  importMany: (questions) => axiosClient.post("/questions/import", { questions }, { timeout: 60000 }),
   create: (payload) => axiosClient.post("/questions", payload),
   update: (id, payload) => axiosClient.put(`/questions/${id}`, payload),
   remove: (id) => axiosClient.delete(`/questions/${id}`),
+  tree: (params) => axiosClient.get("/questions/tree", { params }),
+  bulk: (payload) => axiosClient.post("/questions/bulk", payload),
 };
 
 export const userService = {
@@ -71,11 +81,17 @@ export const badgeService = {
   list: () => axiosClient.get("/badges"),
   myBadges: () => axiosClient.get("/badges/me"),
   progress: () => axiosClient.get("/badges/progress"),
+  create: (payload) => axiosClient.post("/badges", payload),
+  update: (id, payload) => axiosClient.put(`/badges/${id}`, payload),
+  remove: (id) => axiosClient.delete(`/badges/${id}`),
 };
 
 export const missionService = {
   list: () => axiosClient.get("/missions"),
   claim: (id) => axiosClient.post(`/missions/${id}/claim`),
+  create: (payload) => axiosClient.post("/missions", payload),
+  update: (id, payload) => axiosClient.put(`/missions/${id}`, payload),
+  remove: (id) => axiosClient.delete(`/missions/${id}`),
 };
 
 export const checkinService = {
@@ -150,11 +166,34 @@ export const testService = {
   create: (payload) => axiosClient.post("/tests", payload),
   update: (id, payload) => axiosClient.put(`/tests/${id}`, payload),
   remove: (id) => axiosClient.delete(`/tests/${id}`),
+  duplicate: (id) => axiosClient.post(`/tests/${id}/duplicate`),
+};
+
+export const arenaService = {
+  overview: (subject) => axiosClient.get("/arena/overview", { params: { subject } }),
+  classmates: () => axiosClient.get("/arena/classmates"),
+  startRun: (payload) => axiosClient.post("/arena/runs", payload),
+  createChallenge: (payload) => axiosClient.post("/arena/challenges", payload),
+  answer: (runId, payload) => axiosClient.post(`/arena/runs/${runId}/answer`, payload),
+  fifty: (runId, question) => axiosClient.post(`/arena/runs/${runId}/fifty`, { question }),
+  finish: (runId) => axiosClient.post(`/arena/runs/${runId}/finish`),
 };
 
 export const adminStatsService = {
   overview: () => axiosClient.get("/admin/stats"),
+  report: (params) => axiosClient.get("/admin/report", { params }),
+  studentReport: (id) => axiosClient.get(`/admin/report/student/${id}`),
+  backup: () => axiosClient.get("/admin/backup"),
+  restore: (payload) => axiosClient.post("/admin/restore", payload),
   lookup: (id) => axiosClient.get(`/admin/lookup/${encodeURIComponent(id)}`),
+  catalog: () => axiosClient.get("/admin/catalog"),
+  comments: (params) => axiosClient.get("/admin/comments", { params }),
+  deleteComments: (ids) => axiosClient.post("/admin/comments/bulk-delete", { ids }),
+  redemptions: (params) => axiosClient.get("/admin/redemptions", { params }),
+  updateRedemption: (id, payload) => axiosClient.patch(`/admin/redemptions/${id}`, payload),
+  broadcasts: () => axiosClient.get("/admin/broadcasts"),
+  sendBroadcast: (payload) => axiosClient.post("/admin/broadcasts", payload),
+  arena: () => axiosClient.get("/admin/arena"),
 };
 
 export const commentService = {
@@ -188,4 +227,16 @@ export const uploadService = {
     formData.append("image", file);
     return axiosClient.post("/uploads/image", formData, { headers: { "Content-Type": "multipart/form-data" } });
   },
+};
+
+export const reviewSessionService = {
+  summary: () => axiosClient.get("/practice-review/summary"),
+  session: () => axiosClient.post("/practice-review/session"),
+  answer: (payload) => axiosClient.post("/practice-review/answer", payload),
+};
+
+export const notificationService = {
+  list: () => axiosClient.get("/notifications"),
+  markRead: (id) => axiosClient.post(`/notifications/${id}/read`),
+  readAll: () => axiosClient.post("/notifications/read-all"),
 };

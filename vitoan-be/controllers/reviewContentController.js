@@ -1,3 +1,4 @@
+const { escapeRegExp } = require("../utils/regex");
 const ReviewContent = require("../models/ReviewContent");
 const Lesson = require("../models/Lesson");
 const { chatCompletion, parseJsonLoose } = require("../utils/openai");
@@ -8,7 +9,7 @@ async function list(req, res, next) {
     if (req.query.grade) filter.grade = req.query.grade;
     if (req.query.subject) filter.subject = req.query.subject;
     if (req.query.chapter) filter.chapter = req.query.chapter;
-    if (req.query.search) filter.title = new RegExp(req.query.search.trim(), "i");
+    if (req.query.search) filter.title = new RegExp(escapeRegExp(req.query.search.trim()), "i");
 
     const lessons = await Lesson.find(filter)
       .populate("subject", "name slug")

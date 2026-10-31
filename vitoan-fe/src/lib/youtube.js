@@ -53,9 +53,15 @@ export function trackYouTube(iframe, { bucketSeconds = 10, startAt = 0, onTick, 
   let lastPosition = 0;
   let duration = 0;
 
+  // Vị trí đang xem: ưu tiên player; nếu player đã bị gỡ (rời trang) và trả về 0 thì giữ vị trí cuối cùng đã biết
+  function currentPosition() {
+    const t = Math.floor(player?.getCurrentTime?.() || 0);
+    return t > 0 ? t : lastPosition;
+  }
+
   function tick() {
     if (!player?.getCurrentTime) return;
-    const position = Math.floor(player.getCurrentTime() || 0);
+    const position = currentPosition();
     duration = Math.floor(player.getDuration() || duration);
     // Chỉ tính đoạn đang phát liền mạch (không tính khi vừa tua nhảy xa).
     const bucket = Math.floor(position / bucketSeconds);
@@ -69,7 +75,7 @@ export function trackYouTube(iframe, { bucketSeconds = 10, startAt = 0, onTick, 
     if (!player?.getCurrentTime) return;
     const buckets = [...pending];
     pending = new Set();
-    onFlush?.({ buckets, position: Math.floor(player.getCurrentTime() || lastPosition), duration, final });
+    onFlush?.({ buckets, position: currentPosition(), duration, final });
   }
 
   // Đóng tab / tải lại / chuyển sang ứng dụng khác: React không kịp chạy dọn dẹp nên lưu ngay tại đây.
@@ -101,7 +107,7 @@ export function trackYouTube(iframe, { bucketSeconds = 10, startAt = 0, onTick, 
         },
         onStateChange: (e) => {
           if (e.data === YT.PlayerState.PLAYING) {
-            lastPosition = Math.floor(player.getCurrentTime() || 0);
+            lastPosition = currentPosition();
             if (!tickTimer) tickTimer = setInterval(tick, TICK_MS);
             if (!flushTimer) flushTimer = setInterval(() => flush(), FLUSH_MS);
           } else if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User } from "../ui/icons.jsx";
+import { OwlAvatarArt, OWL_COUNT, isOwlAvatar, owlIndexFor } from "../../lib/owls.jsx";
 import { cn } from "../../lib/utils";
 
 // Khung avatar đổi được ở trang Đổi quà. Mỗi khung = viền gradient + 1 hình trang trí nhỏ.
@@ -16,6 +16,31 @@ export const FRAMES = {
   ice: { label: "Băng giá", ring: "bg-gradient-to-br from-cyan-100 via-sky-400 to-blue-600", deco: "❄️" },
   galaxy: { label: "Vũ trụ", ring: "bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-500", deco: "✨" },
   gold: { label: "Vàng hoàng gia", ring: "bg-gradient-to-br from-yellow-100 via-amber-500 to-yellow-700", deco: "👑" },
+  ocean: { label: "Đại dương", ring: "bg-gradient-to-br from-cyan-300 via-sky-500 to-blue-700", deco: "🐬" },
+  candy: { label: "Kẹo ngọt", ring: "bg-gradient-to-br from-pink-300 via-fuchsia-300 to-sky-300", deco: "🍭" },
+  sunset: { label: "Hoàng hôn", ring: "bg-gradient-to-br from-yellow-300 via-orange-500 to-pink-600", deco: "🌅" },
+  dino: { label: "Khủng long", ring: "bg-gradient-to-br from-lime-300 via-emerald-500 to-teal-700", deco: "🦖" },
+  unicorn: { label: "Kỳ lân", ring: "bg-gradient-to-br from-pink-200 via-violet-300 to-sky-300", deco: "🦄" },
+  rocket: { label: "Tên lửa", ring: "bg-gradient-to-br from-slate-700 via-indigo-600 to-orange-400", deco: "🚀" },
+  // Khung động (huyền thoại): viền xoay liên tục
+  neon: {
+    label: "Neon xoay",
+    spin: true,
+    style: { background: "conic-gradient(from 0deg,#22d3ee,#a855f7,#ec4899,#facc15,#22c55e,#22d3ee)" },
+    deco: "💫",
+  },
+  aurora: {
+    label: "Cực quang",
+    spin: true,
+    style: { background: "conic-gradient(from 0deg,#34d399,#38bdf8,#818cf8,#f0abfc,#34d399)" },
+    deco: "🌌",
+  },
+  sunfire: {
+    label: "Mặt trời rực lửa",
+    spin: true,
+    style: { background: "conic-gradient(from 0deg,#fde047,#f97316,#dc2626,#f97316,#fde047)" },
+    deco: "☀️",
+  },
 };
 
 export function isVip(user) {
@@ -31,11 +56,12 @@ export default function UserAvatar({ user, size = "h-10 w-10", decoSize = "text-
   const frameKey = frame !== undefined ? frame : user?.equippedFrame;
   const f = FRAMES[frameKey];
   const imgSrc = src !== undefined ? src : user?.avatarUrl;
-  const initial = user?.fullName?.trim()?.split(/\s+/).pop()?.[0]?.toUpperCase();
-  // Ảnh lỗi (vd ảnh Google hết hạn) → quay về chữ cái đầu thay vì hiện icon ảnh vỡ.
+  // Ảnh lỗi (vd ảnh Google hết hạn) → quay về cú mặc định thay vì hiện icon ảnh vỡ.
   const [failedSrc, setFailedSrc] = useState(null);
+  const isPhoto = imgSrc && !isOwlAvatar(imgSrc) && failedSrc !== imgSrc;
+  const owlIdx = isOwlAvatar(imgSrc) ? Number(imgSrc.slice(4)) % OWL_COUNT : owlIndexFor(user);
 
-  const face = imgSrc && failedSrc !== imgSrc ? (
+  const face = isPhoto ? (
     <img
       src={imgSrc}
       alt=""
@@ -44,15 +70,19 @@ export default function UserAvatar({ user, size = "h-10 w-10", decoSize = "text-
       className="h-full w-full rounded-full bg-white object-cover"
     />
   ) : (
-    <span className="flex h-full w-full items-center justify-center rounded-full bg-primary/10 font-display font-bold text-primary">
-      {initial || <User className="h-1/2 w-1/2" strokeWidth={2} />}
-    </span>
+    <OwlAvatarArt idx={owlIdx} className="h-full w-full rounded-full" />
   );
 
   return (
     <span className={cn("relative inline-flex shrink-0", size, className)}>
-      {f ? (
-        <span className={cn("flex h-full w-full rounded-full p-[3px] shadow-elevation-1", f.ring)} style={f.style}>
+      {f?.spin ? (
+        // Viền xoay: lớp màu nằm dưới và quay, ảnh nằm trên đứng yên
+        <span className="relative flex h-full w-full rounded-full p-[max(3px,6%)] shadow-[0_0_14px_-2px_rgba(168,85,247,0.55)]">
+          <span aria-hidden className="absolute inset-0 animate-[spin_3s_linear_infinite] rounded-full" style={f.style} />
+          <span className="relative flex h-full w-full rounded-full bg-white p-[1.5px]">{face}</span>
+        </span>
+      ) : f ? (
+        <span className={cn("flex h-full w-full rounded-full p-[max(3px,6%)] shadow-elevation-1", f.ring)} style={f.style}>
           <span className="flex h-full w-full rounded-full bg-white p-[1.5px]">{face}</span>
         </span>
       ) : (

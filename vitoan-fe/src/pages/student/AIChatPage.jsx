@@ -75,9 +75,14 @@ export default function AIChatPage() {
     setError("");
   }
 
-  async function handleSend(e) {
+  function handleSend(e) {
     e.preventDefault();
-    const text = input.trim();
+    return sendText(input);
+  }
+
+  // Gửi 1 câu hỏi (từ ô nhập hoặc bấm câu gợi ý — bé bấm là gửi luôn, không phải bấm thêm lần nữa).
+  async function sendText(raw) {
+    const text = raw.trim();
     if (!text || sending) return;
     setSending(true);
     setError("");
@@ -102,7 +107,7 @@ export default function AIChatPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div>
       <div className="page pb-0">
         <PageHeader icon={Bot} tone="violet" title="Bạn đồng hành" subtitle="Hỏi cú ViToan bất cứ điều gì về bài học nhé!" />
       </div>
@@ -172,7 +177,7 @@ export default function AIChatPage() {
                     <button
                       key={q}
                       type="button"
-                      onClick={() => setInput(q)}
+                      onClick={() => sendText(q)}
                       className="rounded-full bg-gradient-to-r from-sky-50 to-violet-50 px-4 py-2 text-sm font-bold text-slate-600 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:text-primary hover:ring-primary/40"
                     >
                       {q}

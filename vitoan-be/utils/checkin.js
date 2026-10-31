@@ -25,10 +25,12 @@ async function bestCheckInStreak(studentId) {
 // Trạng thái điểm danh: đã điểm danh hôm nay chưa, chuỗi hiện tại, kỷ lục, thưởng hôm nay
 async function checkInStatus(studentId, now = new Date()) {
   const today = vnDayKey(now);
-  const [last, bestStreak, total] = await Promise.all([
+  const { computeStreak } = require("./badgeStats"); // nạp muộn để tránh vòng require
+  const [last, bestStreak, total, activeStreak] = await Promise.all([
     CheckIn.findOne({ student: studentId }).sort({ dayKey: -1 }).lean(),
     bestCheckInStreak(studentId),
     CheckIn.countDocuments({ student: studentId }),
+    computeStreak(studentId),
   ]);
   const checkedToday = last?.dayKey === today;
   // Chuỗi còn giữ nếu lần cuối là hôm nay hoặc hôm qua
@@ -38,6 +40,7 @@ async function checkInStatus(studentId, now = new Date()) {
     today,
     checkedToday,
     streak,
+    activeStreak, // chuỗi ngày học tổng (luyện tập + điểm danh) — khớp với số hiển thị ở trang chủ
     bestStreak,
     totalDays: total,
     todayReward: checkedToday ? last.rewardPoints : rewardForStreak(todayStreak),

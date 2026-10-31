@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import Button from "../../components/ui/Button.jsx";
 import PasswordInput from "../../components/ui/PasswordInput.jsx";
+import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
 import PageHeader, { HeaderStat } from "../../components/ui/PageHeader.jsx";
 
 function FieldError({ message }) {
@@ -68,7 +69,8 @@ export default function ChangePasswordPage() {
     <div className="page">
       <PageHeader icon={Lock} tone="blue" title="Đổi mật khẩu" subtitle="Nhập mật khẩu hiện tại và mật khẩu mới để cập nhật" />
 
-      <form onSubmit={handleSubmit} noValidate className="mx-auto mt-5 max-w-xl space-y-4 rounded-3xl bg-white p-6 shadow-elevation-1 sm:p-8">
+      <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4 rounded-3xl bg-white p-6 shadow-elevation-1 sm:p-8">
         <div>
           <label className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
             <Lock className="h-4 w-4" /> Mật khẩu hiện tại <span className="text-red-500">*</span>
@@ -112,6 +114,22 @@ export default function ChangePasswordPage() {
           </Button>
         </div>
       </form>
+      <aside className="space-y-5 lg:self-start">
+        <section className="rounded-3xl bg-white p-6 shadow-elevation-1">
+          <h2 className="font-display text-xl font-black text-[#0b2340]">Mật khẩu an toàn</h2>
+          <ul className="mt-3 space-y-2.5 text-[15px] font-semibold text-slate-600">
+            <li className="flex gap-2"><span>✅</span> Từ 8 ký tự trở lên</li>
+            <li className="flex gap-2"><span>✅</span> Có cả chữ và số</li>
+            <li className="flex gap-2"><span>✅</span> Không dùng ngày sinh hay tên của em</li>
+            <li className="flex gap-2"><span>✅</span> Không nói mật khẩu cho bạn bè</li>
+          </ul>
+        </section>
+        <section className="flex items-center gap-4 rounded-3xl bg-gradient-to-br from-sky-50 to-violet-50 p-6 shadow-elevation-1">
+          <OwlMascot className="h-20 w-20 shrink-0" animated={false} />
+          <p className="font-semibold text-slate-600">Cú ViToan giữ bí mật giúp em! Nhờ ba mẹ giúp nếu em quên mật khẩu nhé.</p>
+        </section>
+      </aside>
+      </div>
     </div>
   );
 }

@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema(
     nameColor: { type: String, default: "" },
     vipUntil: { type: Date },
     isActive: { type: Boolean, default: true },
+    // Tài khoản thử nghiệm/demo: không tính vào thống kê và báo cáo của quản trị viên.
+    isTest: { type: Boolean, default: false },
+    // Cá nhân hoá: số bài luyện tập mỗi ngày em muốn đạt, và đã xem màn chào mừng lần đầu chưa.
+    dailyGoal: { type: Number, default: 3, min: 1, max: 10 },
+    onboarded: { type: Boolean, default: false },
     status: { type: String, enum: ["active", "suspended", "disabled"], default: "active" },
     lastLoginAt: { type: Date },
   },

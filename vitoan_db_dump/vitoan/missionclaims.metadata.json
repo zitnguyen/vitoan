@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"student":{"$numberInt":"1"},"mission":{"$numberInt":"1"},"periodKey":{"$numberInt":"1"}},"name":"student_1_mission_1_periodKey_1","unique":true}],"uuid":"5c60c13bc27949fb95b070f7ebc7f864","collectionName":"missionclaims","type":"collection"}
