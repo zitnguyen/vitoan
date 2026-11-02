@@ -3,7 +3,7 @@
 // Speech API của trình duyệt), backend chỉ nhận text.
 const Conversation = require("../models/Conversation");
 const ChatMessage = require("../models/ChatMessage");
-const { chatCompletion } = require("../utils/openai");
+const { chatCompletion } = require("../utils/ai");
 
 const SYSTEM_PROMPT =
   'Bạn là "Bạn đồng hành", trợ lý học tập AI thân thiện của ViToan dành cho học sinh tiểu học Việt Nam. ' +

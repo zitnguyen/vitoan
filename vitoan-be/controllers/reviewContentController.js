@@ -1,7 +1,7 @@
 const { escapeRegExp } = require("../utils/regex");
 const ReviewContent = require("../models/ReviewContent");
 const Lesson = require("../models/Lesson");
-const { chatCompletion, parseJsonLoose } = require("../utils/openai");
+const { chatCompletion, parseJsonLoose } = require("../utils/ai");
 
 async function list(req, res, next) {
   try {

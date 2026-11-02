@@ -9,7 +9,7 @@ const User = require("../models/User");
 const Attempt = require("../models/Attempt");
 const TestAttempt = require("../models/TestAttempt");
 const { gradeAnswer } = require("../utils/grading");
-const { chatCompletion, parseJsonLoose } = require("../utils/openai");
+const { chatCompletion, parseJsonLoose } = require("../utils/ai");
 
 const DIFFICULTY_LABEL = { easy: "Dễ", medium: "Trung bình", hard: "Khó" };
 
