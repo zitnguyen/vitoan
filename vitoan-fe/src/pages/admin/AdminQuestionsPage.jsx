@@ -12,11 +12,13 @@ import { useDialog } from "../../context/DialogContext.jsx";
 
 const TYPE_LABELS = {
   multiple_choice: "Trắc nghiệm (chọn 1 đáp án)",
+  multi_choice: "Chọn nhiều đáp án",
   true_false: "Đúng / Sai",
   fill_blank: "Điền vào chỗ trống",
   listen_choice: "Nghe rồi chọn đáp án",
   listen_fill: "Nghe rồi điền",
 };
+const isRight = (q, ci) => (q.type === "multi_choice" ? (q.correctIndexes || []).includes(ci) : ci === q.correctIndex);
 const DIFFICULTY_LABEL = { easy: "Dễ", medium: "Trung bình", hard: "Khó" };
 const FILL_TYPES = ["fill_blank", "listen_fill"];
 const LISTEN_TYPES = ["listen_choice", "listen_fill"];
@@ -27,6 +29,7 @@ const EMPTY_FORM = {
   imageUrl: "",
   choices: ["", "", "", ""],
   correctIndex: 0,
+  correctIndexes: [],
   correctText: "",
   explanation: "",
   difficulty: "easy",
@@ -91,8 +94,14 @@ export default function AdminQuestionsPage() {
       text: question.text,
       audioText: question.audioText || "",
       imageUrl: question.imageUrl || "",
-      choices: question.choices?.length ? [...question.choices] : ["", "", "", ""],
+      // Chuẩn hoá: trắc nghiệm luôn 4 đáp án A–D (không còn câu 3 đáp án), Đúng/Sai 2 đáp án.
+      choices: question.choices?.length
+        ? question.type === "true_false"
+          ? [...question.choices]
+          : [...question.choices, "", "", "", ""].slice(0, 4)
+        : ["", "", "", ""],
       correctIndex: question.correctIndex || 0,
+      correctIndexes: question.correctIndexes?.length ? [...question.correctIndexes] : [],
       correctText: question.correctText || "",
       explanation: question.explanation || "",
       difficulty: question.difficulty || "easy",
@@ -113,6 +122,7 @@ export default function AdminQuestionsPage() {
       type,
       choices: type === "true_false" ? ["Đúng", "Sai"] : f.choices.length === 2 ? ["", "", "", ""] : f.choices,
       correctIndex: 0,
+      correctIndexes: [],
     }));
   }
 
@@ -146,10 +156,16 @@ export default function AdminQuestionsPage() {
       setError('Câu điền chỗ trống cần có "___" (3 dấu gạch dưới) ở vị trí ô trống.');
       return;
     }
+    if (form.type === "multi_choice" && form.correctIndexes.length < 2) {
+      setError("Câu chọn nhiều đáp án cần đánh dấu ít nhất 2 đáp án đúng.");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
         ...form,
+        correctIndex: form.type === "multi_choice" ? form.correctIndexes[0] : form.correctIndex,
+        correctIndexes: form.type === "multi_choice" ? form.correctIndexes : [],
         lesson: lessonId,
         choices: isFill ? [] : form.choices.map((c) => c.trim()),
         correctText: isFill ? form.correctText.trim() : "",
@@ -204,6 +220,7 @@ export default function AdminQuestionsPage() {
   }
 
   const isFill = form && FILL_TYPES.includes(form.type);
+  const isCorrectChoice = (idx) => (form.type === "multi_choice" ? form.correctIndexes.includes(idx) : form.correctIndex === idx);
   const shown = questions
     .map((q, i) => ({ q, i }))
     .filter(({ q }) => !filter || q.text.toLowerCase().includes(filter.trim().toLowerCase()));
@@ -347,26 +364,44 @@ export default function AdminQuestionsPage() {
               <input className={inputClass} value={form.correctText} onChange={(e) => setForm((f) => ({ ...f, correctText: e.target.value }))} required />
             </Field>
           ) : (
-            <Field label="Các đáp án — bấm vào vòng tròn để chọn đáp án đúng">
+            <Field
+              label={
+                form.type === "multi_choice"
+                  ? "Các đáp án — bấm vào ô vuông để tích TẤT CẢ đáp án đúng (ít nhất 2)"
+                  : "Các đáp án — bấm vào vòng tròn để chọn đáp án đúng"
+              }
+            >
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 {form.choices.map((choice, idx) => (
                   <div
                     key={idx}
                     className={cn(
                       "flex items-center gap-2 rounded-xl border-2 p-1.5 pl-2",
-                      form.correctIndex === idx ? "border-green-400 bg-green-50" : "border-slate-100"
+                      isCorrectChoice(idx) ? "border-green-400 bg-green-50" : "border-slate-100"
                     )}
                   >
                     <button
                       type="button"
-                      onClick={() => setForm((f) => ({ ...f, correctIndex: idx }))}
+                      onClick={() =>
+                        setForm((f) =>
+                          f.type === "multi_choice"
+                            ? {
+                                ...f,
+                                correctIndexes: f.correctIndexes.includes(idx)
+                                  ? f.correctIndexes.filter((i) => i !== idx)
+                                  : [...f.correctIndexes, idx].sort(),
+                              }
+                            : { ...f, correctIndex: idx }
+                        )
+                      }
                       title="Chọn làm đáp án đúng"
                       className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 font-bold",
-                        form.correctIndex === idx ? "border-green-500 bg-green-500 text-white" : "border-slate-300 text-slate-500"
+                        "flex h-8 w-8 shrink-0 items-center justify-center border-2 font-bold",
+                        form.type === "multi_choice" ? "rounded-lg" : "rounded-full",
+                        isCorrectChoice(idx) ? "border-green-500 bg-green-500 text-white" : "border-slate-300 text-slate-500"
                       )}
                     >
-                      {form.correctIndex === idx ? <CheckCircle2 className="h-5 w-5" /> : "ABCD"[idx]}
+                      {isCorrectChoice(idx) ? <CheckCircle2 className="h-5 w-5" /> : "ABCD"[idx]}
                     </button>
                     <input
                       className={inputClass}
@@ -376,23 +411,9 @@ export default function AdminQuestionsPage() {
                       placeholder={`Đáp án ${"ABCD"[idx]}`}
                       required
                     />
-                    {form.type !== "true_false" && form.choices.length > 2 && (
-                      <IconButton title="Bỏ đáp án này" tone="danger" onClick={() => removeChoice(idx)}>
-                        <X className="h-4 w-4" />
-                      </IconButton>
-                    )}
                   </div>
                 ))}
               </div>
-              {form.type !== "true_false" && form.choices.length < 4 && (
-                <button
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, choices: [...f.choices, ""] }))}
-                  className="mt-2 flex items-center gap-1 text-sm font-bold text-primary hover:underline"
-                >
-                  <Plus className="h-4 w-4" /> Thêm đáp án
-                </button>
-              )}
             </Field>
           )}
 
@@ -447,8 +468,8 @@ export default function AdminQuestionsPage() {
                 ) : (
                   <ul className="mt-2 grid grid-cols-1 gap-x-4 gap-y-0.5 text-slate-600 sm:grid-cols-2">
                     {q.choices.map((choice, ci) => (
-                      <li key={ci} className={cn("flex items-center gap-1.5", ci === q.correctIndex && "font-semibold text-green-700")}>
-                        {ci === q.correctIndex ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <span className="w-4 text-center text-slate-400">{"ABCD"[ci]}</span>}
+                      <li key={ci} className={cn("flex items-center gap-1.5", isRight(q, ci) && "font-semibold text-green-700")}>
+                        {isRight(q, ci) ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <span className="w-4 text-center text-slate-400">{"ABCD"[ci]}</span>}
                         {choice}
                       </li>
                     ))}

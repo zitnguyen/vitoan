@@ -14,7 +14,7 @@ const questionSchema = new mongoose.Schema(
     testOnly: { type: Boolean, default: false },
     type: {
       type: String,
-      enum: ["multiple_choice", "true_false", "listen_choice", "fill_blank", "listen_fill"],
+      enum: ["multiple_choice", "true_false", "listen_choice", "multi_choice", "fill_blank", "listen_fill"],
       default: "multiple_choice",
     },
     text: { type: String, required: true },
@@ -44,6 +44,8 @@ const questionSchema = new mongoose.Schema(
       },
       default: 0,
     },
+    // Câu "chọn nhiều đáp án" (multi_choice): danh sách vị trí các đáp án đúng.
+    correctIndexes: { type: [Number], default: [] },
     // Đáp án đúng dạng chữ/số cho câu "điền vào chỗ trống" — question.text chứa
     // dấu "___" đánh dấu vị trí ô nhập; so khớp không phân biệt hoa/thường, bỏ khoảng trắng thừa.
     correctText: {

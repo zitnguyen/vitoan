@@ -122,6 +122,7 @@ export const attemptService = {
   submitGuest: (payload) => axiosClient.post("/attempts/guest", payload),
   getOne: (id) => axiosClient.get(`/attempts/${id}`),
   myHistory: () => axiosClient.get("/attempts/me"),
+  practiceSummary: () => axiosClient.get("/attempts/practice-summary"),
   completedLessons: () => axiosClient.get("/attempts/completed-lessons"),
   lessonStatus: (chapter) => axiosClient.get("/attempts/lesson-status", { params: { chapter } }),
   stats: () => axiosClient.get("/attempts/stats"),
@@ -177,6 +178,9 @@ export const arenaService = {
   answer: (runId, payload) => axiosClient.post(`/arena/runs/${runId}/answer`, payload),
   fifty: (runId, question) => axiosClient.post(`/arena/runs/${runId}/fifty`, { question }),
   finish: (runId) => axiosClient.post(`/arena/runs/${runId}/finish`),
+  liveQueue: (subject) => axiosClient.post("/arena/live", { subject }),
+  liveStatus: (id) => axiosClient.get(`/arena/live/${id}`),
+  liveCancel: (id) => axiosClient.delete(`/arena/live/${id}`),
 };
 
 export const adminStatsService = {

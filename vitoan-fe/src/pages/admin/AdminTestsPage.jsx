@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import IdBadge from "../../components/common/IdBadge.jsx";
-import { Pencil, Trash2, X, Plus, Search, Eye, EyeOff, Copy, ChevronDown } from "lucide-react";
+import { Pencil, Trash2, X, Plus, Search, Eye, EyeOff, Copy, ChevronDown, CheckCircle2, Minus } from "lucide-react";
 import { gradeService, subjectService, chapterService, lessonService, questionService, testService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
 import CustomQuestionPanel from "../../components/admin/CustomQuestionPanel.jsx";
@@ -29,6 +29,41 @@ const filterSelectClass =
 const TEST_TYPE_LABEL = { topic: "Theo chủ đề", midterm: "Giữa kỳ", final: "Cuối kỳ" };
 const LEVEL_LABEL = { easy: "Dễ", medium: "Trung bình", hard: "Khó" };
 
+const FILL = ["fill_blank", "listen_fill"];
+const TYPE_TAG = {
+  multiple_choice: "Chọn 1 đáp án",
+  multi_choice: "Chọn nhiều đáp án",
+  true_false: "Đúng / Sai",
+  fill_blank: "Điền chỗ trống",
+  listen_choice: "Nghe & chọn",
+  listen_fill: "Nghe & điền",
+};
+
+function QuestionDetail({ q }) {
+  const right = (i) => (q.type === "multi_choice" ? (q.correctIndexes || []).includes(i) : i === q.correctIndex);
+  return (
+    <div className="ml-6 mt-1 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-100">
+      <p className="text-xs font-bold text-slate-400">
+        {TYPE_TAG[q.type] || "Trắc nghiệm"} · độ khó: {LEVEL_LABEL[q.difficulty] || "—"}
+      </p>
+      {q.imageUrl && <img src={q.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg" />}
+      {FILL.includes(q.type) ? (
+        <p className="mt-1.5 font-bold text-primary">Đáp án đúng: {q.correctText}</p>
+      ) : (
+        <ul className="mt-1.5 grid gap-1 sm:grid-cols-2">
+          {(q.choices || []).map((c, i) => (
+            <li key={i} className={cn("flex items-center gap-1.5 rounded-lg px-2 py-1", right(i) ? "bg-primary/10 font-bold text-primary" : "bg-white text-slate-600")}>
+              {right(i) ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <span className="w-4 shrink-0 text-center text-slate-400">{"ABCD"[i]}</span>}
+              {c}
+            </li>
+          ))}
+        </ul>
+      )}
+      {q.explanation && <p className="mt-1.5 text-slate-500">💡 {q.explanation}</p>}
+    </div>
+  );
+}
+
 export default function AdminTestsPage() {
   const dialog = useDialog();
   const [grades, setGrades] = useState([]);
@@ -45,6 +80,7 @@ export default function AdminTestsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState("");
+  const [openDetail, setOpenDetail] = useState({}); // id câu hỏi đang mở xem chi tiết
 
   const [searchParams, setSearchParams] = useSearchParams();
   const editParam = searchParams.get("edit");
@@ -312,6 +348,11 @@ export default function AdminTestsPage() {
           className="mt-6 space-y-3 rounded-2xl bg-white p-6 shadow-elevation-1 ring-1 ring-slate-100"
         >
           <p className="font-display text-lg font-bold text-slate-800">{editingId ? "Sửa bài kiểm tra" : "Thêm bài kiểm tra"}</p>
+          {editingId && (
+            <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+              Môn, lớp, loại đề và chủ đề/học kỳ đã cố định, không đổi được khi sửa. Muốn đổi hãy tạo đề mới.
+            </p>
+          )}
           {/* Thứ tự theo quan hệ 1-nhiều: Môn → Lớp → Loại → Chủ đề/Học kỳ, rồi mới tới thông tin bài */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
@@ -321,6 +362,7 @@ export default function AdminTestsPage() {
                 value={form.subject}
                 onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value, chapter: "", questions: [] }))}
                 required
+                disabled={!!editingId}
               >
                 <option value="">-- Chọn môn --</option>
                 {subjects.map((s) => (
@@ -337,6 +379,7 @@ export default function AdminTestsPage() {
                 value={form.grade}
                 onChange={(e) => setForm((f) => ({ ...f, grade: e.target.value, chapter: "", questions: [] }))}
                 required
+                disabled={!!editingId}
               >
                 <option value="">-- Chọn lớp --</option>
                 {grades.map((g) => (
@@ -352,6 +395,7 @@ export default function AdminTestsPage() {
                 className={`${inputClass} mt-1`}
                 value={form.testType}
                 onChange={(e) => setForm((f) => ({ ...f, testType: e.target.value, chapter: "", questions: [] }))}
+                disabled={!!editingId}
               >
                 <option value="topic">Theo chủ đề</option>
                 <option value="midterm">Giữa kỳ</option>
@@ -365,7 +409,7 @@ export default function AdminTestsPage() {
                   className={`${inputClass} mt-1`}
                   value={form.chapter}
                   onChange={(e) => setForm((f) => ({ ...f, chapter: e.target.value, questions: [] }))}
-                  disabled={!form.subject || !form.grade}
+                  disabled={!form.subject || !form.grade || !!editingId}
                   required
                 >
                   <option value="">{form.subject && form.grade ? "-- Chọn chủ đề --" : "Chọn môn & lớp trước"}</option>
@@ -383,6 +427,7 @@ export default function AdminTestsPage() {
                   className={`${inputClass} mt-1`}
                   value={form.semester}
                   onChange={(e) => setForm((f) => ({ ...f, semester: Number(e.target.value) }))}
+                  disabled={!!editingId}
                 >
                   <option value={1}>Học kỳ 1</option>
                   <option value={2}>Học kỳ 2</option>
@@ -523,17 +568,28 @@ export default function AdminTestsPage() {
                       </label>
                       <div className="mt-1 ml-6 space-y-1">
                         {questions.map((q, idx) => (
-                          <label key={q._id} className="flex items-start gap-2 text-sm text-slate-600">
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4 accent-primary"
-                              checked={form.questions.includes(q._id)}
-                              onChange={() => toggleQuestion(q._id)}
-                            />
-                            <span>
-                              {idx + 1}. {q.text}
-                            </span>
-                          </label>
+                          <div key={q._id} className="text-sm text-slate-600">
+                            <div className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                                checked={form.questions.includes(q._id)}
+                                onChange={() => toggleQuestion(q._id)}
+                              />
+                              <span className="flex-1">
+                                {idx + 1}. {q.text}
+                              </span>
+                              <button
+                                type="button"
+                                title={openDetail[q._id] ? "Thu gọn chi tiết" : "Xem chi tiết câu hỏi"}
+                                onClick={() => setOpenDetail((o) => ({ ...o, [q._id]: !o[q._id] }))}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500 hover:bg-primary/10 hover:text-primary"
+                              >
+                                {openDetail[q._id] ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                              </button>
+                            </div>
+                            {openDetail[q._id] && <QuestionDetail q={q} />}
+                          </div>
                         ))}
                       </div>
                     </div>

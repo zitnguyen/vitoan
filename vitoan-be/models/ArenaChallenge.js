@@ -14,6 +14,8 @@ const arenaChallengeSchema = new mongoose.Schema(
     status: { type: String, enum: ["waiting", "open", "accepted", "done"], default: "waiting" },
     winner: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     draw: { type: Boolean, default: false },
+    // Trận đấu trực tiếp: hai bạn chơi CÙNG LÚC, thấy tiến độ của nhau theo thời gian thực.
+    live: { type: Boolean, default: false },
     expiresAt: { type: Date, required: true },
   },
   { timestamps: true }

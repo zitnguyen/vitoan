@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Home,
@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Gem,
   Clock,
+  ChevronDown,
 } from "../ui/icons.jsx";
 import OwlMascot from "../illustrations/OwlMascot.jsx";
 import { testAttemptService } from "../../api/services";
@@ -151,7 +152,7 @@ function FeedbackPanel({ feedback }) {
           {feedback.byLesson.map((g) => (
             <div key={g.lesson} className="flex items-center gap-2">
               <Link to={`/bai/${g.lesson}`} className="w-1/2 truncate text-xs font-semibold text-slate-600 hover:text-primary">
-                {g.title}
+                {g.position}. {g.title}
               </Link>
               <div className="h-2 flex-1 overflow-clip rounded-full bg-slate-100">
                 <div
@@ -207,6 +208,124 @@ function AttemptHistory({ history, currentId, linkPrefix }) {
   );
 }
 
+const TYPE_TAG = {
+  multiple_choice: "Chọn 1 đáp án",
+  multi_choice: "Chọn nhiều đáp án",
+  true_false: "Đúng / Sai",
+  fill_blank: "Điền chỗ trống",
+  listen_choice: "Nghe & chọn",
+  listen_fill: "Nghe & điền",
+};
+
+// Sắp các câu theo thứ tự bài trong chương trình (chủ đề → bài), đánh số lại 1..N và gom theo bài.
+function buildGroups(answers) {
+  const keyOf = (q) => q?.lesson?._id || "other";
+  const sortKey = (q) => [q?.lesson?.chapter?.order ?? (q?.lesson ? 500 : 999), q?.lesson?.order ?? 0];
+  const sorted = answers
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => {
+      const kx = sortKey(x.a.question);
+      const ky = sortKey(y.a.question);
+      return kx[0] - ky[0] || kx[1] - ky[1] || x.i - y.i;
+    })
+    .map(({ a }, n) => ({ ...a, number: n + 1 }));
+  const map = new Map();
+  for (const a of sorted) {
+    const key = keyOf(a.question);
+    if (!map.has(key)) map.set(key, { key, title: a.question?.lesson?.title || "Câu hỏi riêng của đề", items: [] });
+    map.get(key).items.push(a);
+  }
+  return { sorted, groups: [...map.values()] };
+}
+
+function ReviewCard({ answer }) {
+  const q = answer.question;
+  if (!q) return null;
+  const isFillType = q.type === "fill_blank" || q.type === "listen_fill";
+  const isMulti = q.type === "multi_choice";
+  const correctSet = isMulti ? q.correctIndexes || [] : [q.correctIndex];
+  const pickedSet = isMulti ? answer.selectedIndexes || [] : [answer.selectedIndex];
+  return (
+    <div className={cn("rounded-2xl bg-white p-5 shadow-elevation-1 ring-1", answer.correct ? "ring-primary/20" : "ring-red-200")}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="flex items-start gap-2.5 font-display font-bold text-slate-800">
+          <span className="mt-0.5 flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 px-1 text-sm text-slate-500">
+            {answer.number}
+          </span>
+          <span>{q.text.replace(/___/g, "…").replace(/\n/g, " ")}</span>
+        </p>
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold",
+            answer.correct ? "bg-primary/10 text-primary" : "bg-red-100 text-red-600"
+          )}
+        >
+          {answer.correct ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+          {answer.correct ? "Đúng" : "Sai"}
+        </span>
+      </div>
+      <p className="mt-1.5 pl-9 text-xs font-semibold text-slate-400">{TYPE_TAG[q.type] || "Trắc nghiệm"}</p>
+      {q.imageUrl && <img src={q.imageUrl} alt="" className="mt-3 h-auto max-w-full rounded-xl" />}
+      {isFillType ? (
+        <div className="mt-3 space-y-1.5 text-sm">
+          <div
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl border-2 px-3 py-2.5 font-medium",
+              answer.correct ? "border-primary bg-primary/5 text-primary" : "border-red-300 bg-red-50 text-red-600"
+            )}
+          >
+            {answer.correct ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+            Đáp án của em: {answer.textAnswer || "(bỏ trống)"}
+          </div>
+          {!answer.correct && (
+            <div className="flex items-center gap-1.5 rounded-xl border-2 border-primary bg-primary/5 px-3 py-2.5 font-medium text-primary">
+              <CheckCircle2 className="h-4 w-4 shrink-0" /> Đáp án đúng: {q.correctText}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {q.choices.map((choice, choiceIdx) => {
+            const isCorrect = correctSet.includes(choiceIdx);
+            const picked = pickedSet.includes(choiceIdx);
+            const isWrongPick = picked && !isCorrect;
+            const missed = isMulti && isCorrect && !picked;
+            return (
+              <div
+                key={choiceIdx}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-sm font-medium",
+                  isCorrect && "border-primary bg-primary/5 text-primary",
+                  isWrongPick && "border-red-300 bg-red-50 text-red-600",
+                  !isCorrect && !isWrongPick && "border-slate-100 bg-slate-50 text-slate-500"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center text-sm font-black",
+                    isMulti ? "rounded-lg" : "rounded-full",
+                    isCorrect && "bg-primary text-white",
+                    isWrongPick && "bg-red-500 text-white",
+                    !isCorrect && !isWrongPick && "bg-slate-200 text-slate-500"
+                  )}
+                >
+                  {LETTERS[choiceIdx] ?? choiceIdx + 1}
+                </span>
+                <span className="flex-1">{choice}</span>
+                {missed && <span className="shrink-0 text-xs font-bold">(em chưa chọn)</span>}
+                {picked && isCorrect && <span className="shrink-0 text-xs font-bold">(em chọn)</span>}
+                {isCorrect && <CheckCircle2 className="h-4 w-4 shrink-0" />}
+                {isWrongPick && <XCircle className="h-4 w-4 shrink-0" />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {q.explanation && <p className="mt-3 rounded-xl bg-secondary/5 px-3 py-2 text-caption text-slate-600">💡 Giải thích: {q.explanation}</p>}
+    </div>
+  );
+}
+
 export default function QuizResultView({
   attempt,
   guest = false,
@@ -220,6 +339,7 @@ export default function QuizResultView({
   historyLinkPrefix = "/kiem-tra/ket-qua/",
 }) {
   const [onlyWrong, setOnlyWrong] = useState(false);
+  const [collapsed, setCollapsed] = useState({});
   // Hiện bảng điểm trước, bấm "Xem chi tiết" mới mở bảng kết quả từng câu.
   const [revealed, setRevealed] = useState(false);
   const percent = Math.round((attempt.score / attempt.totalQuestions) * 100);
@@ -230,7 +350,8 @@ export default function QuizResultView({
   // Điểm bài kiểm tra quy về thang 10, làm tròn 0.25 như cách chấm ở trường tiểu học.
   const score10 = attempt.totalQuestions ? Math.round((attempt.score / attempt.totalQuestions) * 40) / 4 : 0;
   const resolvedBackTo = backTo || (lessonId ? `/bai/${lessonId}` : null);
-  const shownAnswers = attempt.answers.map((a, idx) => ({ ...a, idx })).filter((a) => !onlyWrong || !a.correct);
+  const { sorted: sortedAnswers, groups } = useMemo(() => buildGroups(attempt.answers), [attempt.answers]);
+  const allCollapsed = groups.length > 0 && groups.every((g) => collapsed[g.key]);
 
   return (
     <div className="lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start lg:gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
@@ -385,7 +506,7 @@ export default function QuizResultView({
         <div className="rounded-2xl bg-white p-5 shadow-elevation-1">
           <p className="font-display font-bold text-slate-800">Kết quả từng câu</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {attempt.answers.map((a, i) => (
+            {sortedAnswers.map((a, i) => (
               <span
                 key={i}
                 title={a.correct ? "Đúng" : "Sai"}
@@ -413,122 +534,79 @@ export default function QuizResultView({
           </button>
         )}
         {revealed && (
-      <div>
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <p className="font-display text-h3 text-slate-800">Xem lại bài làm</p>
-          {wrongCount > 0 && (
-            <div className="flex rounded-full bg-white p-1 text-sm font-bold shadow-elevation-1">
-              <button
-                type="button"
-                onClick={() => setOnlyWrong(false)}
-                className={cn("rounded-full px-3 py-1", !onlyWrong ? "bg-primary text-white" : "text-slate-500")}
-              >
-                Tất cả
-              </button>
-              <button
-                type="button"
-                onClick={() => setOnlyWrong(true)}
-                className={cn("rounded-full px-3 py-1", onlyWrong ? "bg-red-500 text-white" : "text-slate-500")}
-              >
-                Câu sai ({wrongCount})
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-3">
-          {shownAnswers.map((answer) => {
-            const idx = answer.idx;
-            const q = answer.question;
-            if (!q) return null;
-            const isFillType = q.type === "fill_blank" || q.type === "listen_fill";
-            return (
-              <div
-                key={idx}
-                className={cn(
-                  "rounded-2xl bg-white p-5 shadow-elevation-1 ring-1",
-                  answer.correct ? "ring-primary/20" : "ring-red-200"
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="flex items-start gap-2.5 font-display font-bold text-slate-800">
-                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm text-slate-500">
-                      {idx + 1}
-                    </span>
-                    <span>{q.text.replace(/___/g, "…").replace(/\n/g, " ")}</span>
-                  </p>
-                  <span
-                    className={cn(
-                      "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold",
-                      answer.correct ? "bg-primary/10 text-primary" : "bg-red-100 text-red-600"
-                    )}
+          <div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="font-display text-h3 text-slate-800">Xem lại bài làm</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {groups.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setCollapsed(allCollapsed ? {} : Object.fromEntries(groups.map((g) => [g.key, true])))}
+                    className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-600 shadow-elevation-1 hover:text-primary"
                   >
-                    {answer.correct ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                    {answer.correct ? "Đúng" : "Sai"}
-                  </span>
-                </div>
-                {q.imageUrl && <img src={q.imageUrl} alt="" className="mt-3 h-auto max-w-full rounded-xl" />}
-                {isFillType ? (
-                  <div className="mt-3 space-y-1.5 text-sm">
-                    <div
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-xl border-2 px-3 py-2.5 font-medium",
-                        answer.correct ? "border-primary bg-primary/5 text-primary" : "border-red-300 bg-red-50 text-red-600"
-                      )}
-                    >
-                      {answer.correct ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
-                      Đáp án của em: {answer.textAnswer || "(bỏ trống)"}
-                    </div>
-                    {!answer.correct && (
-                      <div className="flex items-center gap-1.5 rounded-xl border-2 border-primary bg-primary/5 px-3 py-2.5 font-medium text-primary">
-                        <CheckCircle2 className="h-4 w-4 shrink-0" /> Đáp án đúng: {q.correctText}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {q.choices.map((choice, choiceIdx) => {
-                      const isCorrect = choiceIdx === q.correctIndex;
-                      const isWrongPick = choiceIdx === answer.selectedIndex && !isCorrect;
-                      return (
-                        <div
-                          key={choiceIdx}
-                          className={cn(
-                            "flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-sm font-medium",
-                            isCorrect && "border-primary bg-primary/5 text-primary",
-                            isWrongPick && "border-red-300 bg-red-50 text-red-600",
-                            !isCorrect && !isWrongPick && "border-slate-100 bg-slate-50 text-slate-500"
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                              isCorrect && "bg-primary text-white",
-                              isWrongPick && "bg-red-500 text-white",
-                              !isCorrect && !isWrongPick && "bg-slate-200 text-slate-500"
-                            )}
-                          >
-                            {LETTERS[choiceIdx] ?? choiceIdx + 1}
-                          </span>
-                          <span className="flex-1">{choice}</span>
-                          {isCorrect && <CheckCircle2 className="h-4 w-4 shrink-0" />}
-                          {isWrongPick && <XCircle className="h-4 w-4 shrink-0" />}
-                        </div>
-                      );
-                    })}
-                  </div>
+                    {allCollapsed ? "Mở rộng tất cả" : "Thu gọn tất cả"}
+                  </button>
                 )}
-                {q.explanation && (
-                  <p className="mt-3 rounded-xl bg-secondary/5 px-3 py-2 text-caption text-slate-600">
-                    💡 Giải thích: {q.explanation}
-                  </p>
+                {wrongCount > 0 && (
+                  <div className="flex rounded-full bg-white p-1 text-sm font-bold shadow-elevation-1">
+                    <button
+                      type="button"
+                      onClick={() => setOnlyWrong(false)}
+                      className={cn("rounded-full px-3 py-1", !onlyWrong ? "bg-primary text-white" : "text-slate-500")}
+                    >
+                      Tất cả
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOnlyWrong(true)}
+                      className={cn("rounded-full px-3 py-1", onlyWrong ? "bg-red-500 text-white" : "text-slate-500")}
+                    >
+                      Câu sai ({wrongCount})
+                    </button>
+                  </div>
                 )}
               </div>
-            );
-          })}
-        </div>
+            </div>
 
-      </div>
+            <div className="space-y-4">
+              {groups.map((g) => {
+                const items = g.items.filter((a) => !onlyWrong || !a.correct);
+                if (items.length === 0) return null;
+                const isClosed = !!collapsed[g.key];
+                const right = g.items.filter((a) => a.correct).length;
+                return (
+                  <section key={g.key}>
+                    {groups.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] }))}
+                        aria-expanded={!isClosed}
+                        className="mb-2 flex w-full items-center gap-2 rounded-2xl bg-white px-4 py-3 text-left shadow-elevation-1 hover:bg-slate-50"
+                      >
+                        <ChevronDown className={cn("h-5 w-5 shrink-0 text-slate-400 transition", isClosed && "-rotate-90")} />
+                        <span className="min-w-0 flex-1 truncate font-display font-bold text-slate-800">{g.title}</span>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold",
+                            right === g.items.length ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                          )}
+                        >
+                          {right}/{g.items.length} đúng
+                        </span>
+                      </button>
+                    )}
+                    {!isClosed && (
+                      <div className="space-y-3">
+                        {items.map((answer) => (
+                          <ReviewCard key={answer.number} answer={answer} />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          </div>
         )}
         <div className="lg:hidden">
           <ActionButtons guest={guest} backTo={resolvedBackTo} backLabel={backLabel} retryTo={retryTo} />

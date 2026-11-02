@@ -48,7 +48,7 @@ async function session(req, res, next) {
     const ids = due.slice(0, SESSION_SIZE).map((d) => d.question);
     const found = await Question.find({ _id: { $in: ids } }).lean();
     const byId = new Map(found.map((q) => [String(q._id), q]));
-    const questions = ids.map((id) => byId.get(String(id))).filter(Boolean).map(pub);
+    const questions = ids.map((id) => byId.get(String(id))).filter((q) => q && q.type !== "multi_choice").map(pub);
     res.json({ success: true, data: { questions, totalDue: due.length } });
   } catch (err) {
     next(err);

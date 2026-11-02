@@ -24,7 +24,7 @@ import { cn } from "../../lib/utils";
 import { useDialog } from "../../context/DialogContext.jsx";
 
 const EMPTY_CHAPTER = { title: "", semester: 1 };
-const EMPTY_LESSON = { title: "", description: "", isPublished: true, isTrial: false };
+const EMPTY_LESSON = { title: "", description: "", isPublished: true, isTrial: false, randomQuestionCount: 0 };
 
 function Tabs({ items, value, onChange, getLabel }) {
   return (
@@ -186,6 +186,7 @@ export default function AdminLessonsPage() {
         description: lessonForm.description,
         isPublished: lessonForm.isPublished,
         isTrial: lessonForm.isTrial,
+        randomQuestionCount: Math.max(0, Number(lessonForm.randomQuestionCount) || 0),
         subject: subjectId,
         grade: gradeId,
         chapter: targetChapter,
@@ -403,6 +404,19 @@ export default function AdminLessonsPage() {
                       onChange={(e) => setLessonForm((f) => ({ ...f, description: e.target.value }))}
                     />
                   </Field>
+                  <Field
+                    label="Số câu ngẫu nhiên mỗi lượt luyện tập"
+                    hint="0 = học sinh làm toàn bộ câu hỏi của bài. Nhập 10 → mỗi lượt bốc ngẫu nhiên 10 câu."
+                    className="sm:col-span-2"
+                  >
+                    <input
+                      type="number"
+                      min={0}
+                      className={cn(inputClass, "w-40")}
+                      value={lessonForm.randomQuestionCount ?? 0}
+                      onChange={(e) => setLessonForm((f) => ({ ...f, randomQuestionCount: e.target.value }))}
+                    />
+                  </Field>
                   {lessonForm._id && (
                     <Field label="Thuộc chủ đề" className="sm:col-span-2">
                       <select
@@ -453,6 +467,10 @@ export default function AdminLessonsPage() {
                 </div>
               ) : (
                 <div className="mt-3 divide-y divide-slate-100 rounded-xl ring-1 ring-slate-100">
+                  <div className="flex items-center gap-3 bg-slate-50 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-400">
+                    <span className="w-8 shrink-0 text-center">STT</span>
+                    <span>Tên bài học</span>
+                  </div>
                   {shownLessons.map((lesson) => {
                     const index = lessons.findIndex((l) => l._id === lesson._id);
                     return (
@@ -482,7 +500,11 @@ export default function AdminLessonsPage() {
                             </StatusChip>
                             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-sm font-semibold text-slate-600">
                               <Dumbbell className="h-3.5 w-3.5" />
-                              {lesson.practiceSetCount > 0 ? `${lesson.practiceSetCount} bài luyện tập` : "Luyện tập bằng toàn bộ câu hỏi"}
+                              {lesson.practiceSetCount > 0
+                                ? `${lesson.practiceSetCount} bài luyện tập`
+                                : lesson.randomQuestionCount > 0
+                                ? `Luyện tập: ${lesson.randomQuestionCount} câu ngẫu nhiên`
+                                : "Luyện tập bằng toàn bộ câu hỏi"}
                             </span>
                           </div>
                         </Link>
@@ -506,6 +528,7 @@ export default function AdminLessonsPage() {
                                 description: lesson.description || "",
                                 isPublished: lesson.isPublished,
                                 isTrial: !!lesson.isTrial,
+                                randomQuestionCount: lesson.randomQuestionCount || 0,
                                 chapter: lesson.chapter,
                               })
                             }

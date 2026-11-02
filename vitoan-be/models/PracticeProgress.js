@@ -6,6 +6,7 @@ const progressAnswerSchema = new mongoose.Schema(
   {
     question: { type: mongoose.Schema.Types.ObjectId, ref: "Question", required: true },
     selectedIndex: { type: Number, default: -1 },
+    selectedIndexes: { type: [Number], default: [] },
     textAnswer: { type: String, default: "" },
     correct: { type: Boolean, required: true },
   },

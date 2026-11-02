@@ -98,6 +98,17 @@ export default function AdminReportPage() {
         ))}
       </div>
 
+      <Card className="mt-4 bg-sky-50/60 p-4 ring-sky-100">
+        <p className="font-display font-black text-sky-800">Cách đọc báo cáo</p>
+        <ul className="mt-1.5 space-y-1 text-sm text-slate-600">
+          <li>• <b>Số lượt làm bài</b>: số lần học sinh nộp bài luyện tập; phần “… bài kiểm tra” là số lần nộp bài kiểm tra (chủ đề, giữa kỳ, cuối kỳ).</li>
+          <li>• <b>% câu đúng TB</b>: tổng số câu đúng chia tổng số câu đã làm (gộp luyện tập và kiểm tra), không phải điểm trung bình các lượt.</li>
+          <li>• <b>Bài đã đạt</b>: số bài học đạt từ 80% ở bài luyện tập trở lên nên được đánh dấu “Đã học”.</li>
+          <li>• <b>Học lần cuối</b>: lần gần nhất có nộp bài; quá 7 ngày hoặc chưa học bị tính là “cần nhắc nhở”.</li>
+          <li>• Bấm vào một học sinh để xem nhận xét tự động và các bài/câu em hay sai, nhóm theo bài học.</li>
+        </ul>
+      </Card>
+
       {!data ? (
         <div className="mt-10 flex justify-center"><Spinner /></div>
       ) : (
@@ -143,9 +154,9 @@ export default function AdminReportPage() {
             <div className="hidden grid-cols-[minmax(0,2fr)_80px_80px_90px_100px_120px_32px] gap-3 border-b border-slate-100 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-400 md:grid">
               <span>Học sinh</span>
               <span>Lớp</span>
-              <span>Luyện tập</span>
-              <span>Đúng TB</span>
-              <span>Bài đã học</span>
+              <span>Số lượt làm bài</span>
+              <span>% câu đúng TB</span>
+              <span>Bài đã đạt</span>
               <span>Học lần cuối</span>
               <span />
             </div>
@@ -164,7 +175,7 @@ export default function AdminReportPage() {
                       <span className="block truncate text-xs text-slate-400">@{s.username}</span>
                     </span>
                     <span className="text-slate-600">{s.grade || "—"}</span>
-                    <span className="text-slate-600">{s.attempts} lượt{s.testAttempts > 0 && ` · ${s.testAttempts} KT`}</span>
+                    <span className="text-slate-600">{s.attempts} lượt{s.testAttempts > 0 && ` · ${s.testAttempts} bài kiểm tra`}</span>
                     <span className={cn("font-bold", s.avgPercent === null ? "text-slate-300" : s.avgPercent >= 80 ? "text-emerald-600" : s.avgPercent >= 50 ? "text-amber-600" : "text-rose-600")}>
                       {s.avgPercent === null ? "—" : `${s.avgPercent}%`}
                     </span>

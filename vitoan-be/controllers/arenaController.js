@@ -9,6 +9,7 @@ const { gradeAnswer } = require("../utils/grading");
 const { dedupeQuestions } = require("../utils/dedupe");
 const { vnDayKey, prevDayKey } = require("../utils/checkin");
 const { notify } = require("../utils/notify");
+const Notification = require("../models/Notification");
 
 const ARENA_SIZE = 10;
 const QUESTION_SECONDS = 20;
@@ -144,7 +145,7 @@ async function overview(req, res, next) {
     const { start, end } = weekRange(wk);
     const todayStart = new Date(dayStartMs(vnDayKey()));
 
-    const [weekly, allTime, myRuns, runsToday, incoming, mine, lastSettlement] = await Promise.all([
+    const [weekly, allTime, myRuns, runsToday, incoming, mine, lastSettlement, arenaNotes] = await Promise.all([
       subject ? boardFor({ grade, subject, from: start, to: end, meId: me }) : { top: [], me: null },
       subject ? boardFor({ grade, subject, meId: me }) : { top: [], me: null },
       ArenaRun.find({ student: me, status: { $ne: "playing" } }).select("score totalQuestions mode challenge").lean(),
@@ -166,6 +167,7 @@ async function overview(req, res, next) {
         .populate("subject", "name")
         .lean(),
       ArenaSettlement.findOne({ weekKey: prevWeekKey(wk) }).lean(),
+      Notification.find({ user: me, type: { $in: ["challenge", "challenge-result", "weekly-prize", "arena-live"] } }).sort({ createdAt: -1 }).limit(12).lean(),
     ]);
 
     const duels = mine.filter((c) => c.status === "done");
@@ -183,6 +185,7 @@ async function overview(req, res, next) {
         stats: { runs: myRuns.length, best, wins, losses: duels.length - wins - draws, draws, runsToday, paidLeft: Math.max(0, DAILY_PAID_RUNS - runsToday) },
         weekly: { weekKey: wk, endsAt: end, ...weekly },
         allTime,
+        notifications: arenaNotes.map((n) => ({ _id: n._id, icon: n.icon, title: n.title, body: n.body, createdAt: n.createdAt, read: !!n.readAt })),
         incoming: incoming.map((c) => ({
           _id: c._id,
           creator: { id: String(c.creator._id), name: c.creator.fullName },
@@ -392,9 +395,22 @@ async function finish(req, res, next) {
 
     let duel = null;
     let duelBonus = 0;
+    let liveSettle = null; // trận trực tiếp: hồ sơ để chốt kết quả sau khi lưu lượt thi
     if (run.mode === "duel" && run.challenge) {
       const ch = await ArenaChallenge.findById(run.challenge);
-      if (ch) {
+      if (ch && ch.live) {
+        const isCreator = String(ch.creator) === String(run.student);
+        const otherId = isCreator ? ch.opponentRun : ch.creatorRun;
+        const other = otherId ? await ArenaRun.findById(otherId).lean() : null;
+        duel = { role: isCreator ? "creator" : "opponent", live: true, challengeId: ch._id, status: "waiting-for-opponent" };
+        if (other && other.status === "done") {
+          const draw = score === other.score && durationSeconds === other.durationSeconds;
+          const iWin = score > other.score || (score === other.score && durationSeconds < other.durationSeconds);
+          duelBonus = draw ? 10 : iWin ? 30 : 5;
+          duel = { role: isCreator ? "creator" : "opponent", live: true, challengeId: ch._id, result: draw ? "draw" : iWin ? "win" : "lose", theirScore: other.score, theirSeconds: other.durationSeconds };
+          liveSettle = { ch, other, draw, iWin };
+        }
+      } else if (ch) {
         const isCreator = String(ch.creator) === String(run.student);
         if (isCreator) {
           ch.creatorRun = run._id;
@@ -442,6 +458,24 @@ async function finish(req, res, next) {
     await run.save();
     const after = before + gain;
 
+    // Trận trực tiếp: người về đích SAU chốt kết quả, thưởng + báo cho người về trước.
+    if (liveSettle) {
+      const { ch, other, draw, iWin } = liveSettle;
+      ch.status = "done";
+      ch.draw = draw;
+      ch.winner = draw ? undefined : iWin ? run.student : other.student;
+      await ch.save();
+      await ArenaRun.updateOne({ _id: other._id }, { $inc: { rating: draw ? 10 : iWin ? 5 : 30 } });
+      const meUser = await User.findById(run.student).select("fullName").lean();
+      await notify(other.student, {
+        type: "arena-live",
+        icon: draw ? "🤝" : iWin ? "💪" : "🏆",
+        title: draw ? `Hoà với ${meUser?.fullName || "bạn"} trong trận trực tiếp` : iWin ? `${meUser?.fullName || "Bạn"} thắng trận trực tiếp` : `Em đã THẮNG ${meUser?.fullName || "bạn"} trong trận trực tiếp!`,
+        body: `Tỉ số ${other.score} – ${score} câu đúng.`,
+        link: "/dau-truong",
+      });
+    }
+
     // quy đổi ra điểm thưởng (5 lượt đầu mỗi ngày)
     const todayStart = new Date(dayStartMs(vnDayKey()));
     const doneToday = await ArenaRun.countDocuments({ student: run.student, status: "done", createdAt: { $gte: todayStart } });
@@ -481,4 +515,127 @@ async function finish(req, res, next) {
   }
 }
 
-module.exports = { overview, classmates, startRun, createChallenge, answer, fifty, finish };
+// ====================== ĐẤU TRỰC TIẾP (realtime) ======================
+// Ghép cặp: ai bấm "Tìm đối thủ" trước sẽ chờ; người sau cùng lớp, cùng môn vào là ghép luôn.
+// Hai bạn chơi cùng bộ 10 câu, cùng lúc; trang làm bài hỏi /arena/live/:id mỗi ~1,5 giây để thấy tiến độ của nhau.
+const LIVE_WAIT_SECONDS = 120;
+
+async function dropWaitingLive(studentId) {
+  const old = await ArenaChallenge.find({ creator: studentId, live: true, status: "waiting" });
+  for (const c of old) {
+    await ArenaRun.deleteMany({ challenge: c._id, status: "playing" });
+    await ArenaChallenge.deleteOne({ _id: c._id });
+  }
+}
+
+// ---------- POST /arena/live { subject } ----------
+async function liveQueue(req, res, next) {
+  try {
+    if (!req.user.grade) return res.status(400).json({ success: false, message: "Em cần chọn lớp trước" });
+    const grade = req.user.grade._id || req.user.grade;
+    const me = req.user._id;
+    const { subject } = req.body;
+    if (!subject) return res.status(400).json({ success: false, message: "Chọn môn để thi đấu" });
+    await dropWaitingLive(me);
+
+    // 1) có bạn đang chờ → ghép luôn (cập nhật nguyên tử để hai người không cùng nhận 1 bạn)
+    const matched = await ArenaChallenge.findOneAndUpdate(
+      { live: true, status: "waiting", grade, subject, creator: { $ne: me }, expiresAt: { $gt: new Date() } },
+      { $set: { status: "accepted", opponent: me, expiresAt: new Date(Date.now() + 30 * 60 * 1000) } },
+      { sort: { createdAt: 1 }, returnDocument: "after" }
+    );
+    if (matched) {
+      const run = await ArenaRun.create({ student: me, grade, subject, mode: "duel", status: "playing", challenge: matched._id, questions: matched.questions, totalQuestions: matched.questions.length });
+      matched.opponentRun = run._id;
+      await matched.save();
+      const qs = await Question.find({ _id: { $in: matched.questions } }).lean();
+      const creator = await User.findById(matched.creator).select("fullName").lean();
+      return res.status(201).json({ success: true, data: { ...startPayload(run, qs), live: true, matched: true, challengeId: matched._id, opponentName: creator?.fullName || "Bạn" } });
+    }
+
+    // 2) chưa có ai → tạo phòng chờ
+    const picked = await pickQuestions(grade, subject);
+    if (!picked) return res.status(400).json({ success: false, message: "Môn này chưa đủ câu hỏi để thi đấu" });
+    const questionIds = picked.map((q) => q._id);
+    const challenge = await ArenaChallenge.create({
+      creator: me,
+      grade,
+      subject,
+      live: true,
+      status: "waiting",
+      questions: questionIds,
+      expiresAt: new Date(Date.now() + LIVE_WAIT_SECONDS * 1000),
+    });
+    const run = await ArenaRun.create({ student: me, grade, subject, mode: "duel", status: "playing", challenge: challenge._id, questions: questionIds, totalQuestions: questionIds.length });
+    challenge.creatorRun = run._id;
+    await challenge.save();
+    const qs = await Question.find({ _id: { $in: questionIds } }).lean();
+    res.status(201).json({ success: true, data: { ...startPayload(run, qs), live: true, matched: false, challengeId: challenge._id } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+const progressOf = (run) => ({
+  answered: run?.answers?.length || 0,
+  score: run?.answers?.filter((a) => a.correct).length || 0,
+  done: run?.status === "done",
+});
+
+// ---------- GET /arena/live/:id ----------
+async function liveStatus(req, res, next) {
+  try {
+    const ch = await ArenaChallenge.findOne({ _id: req.params.id, live: true, $or: [{ creator: req.user._id }, { opponent: req.user._id }] }).lean();
+    if (!ch) return res.status(404).json({ success: false, message: "Trận đấu này không còn nữa" });
+    const iAmCreator = String(ch.creator) === String(req.user._id);
+    if (ch.status === "waiting" && ch.expiresAt < new Date()) {
+      return res.json({ success: true, data: { state: "expired" } });
+    }
+    const [myRun, oppRun, opp] = await Promise.all([
+      ArenaRun.findById(iAmCreator ? ch.creatorRun : ch.opponentRun).select("answers status score durationSeconds updatedAt").lean(),
+      ch.status === "waiting" ? null : ArenaRun.findById(iAmCreator ? ch.opponentRun : ch.creatorRun).select("answers status score durationSeconds updatedAt").lean(),
+      ch.status === "waiting" ? null : User.findById(iAmCreator ? ch.opponent : ch.creator).select("fullName").lean(),
+    ]);
+    // Bạn kia bỏ dở quá 2 phút (đóng trang/mất mạng) mà em đã xong → em thắng cuộc.
+    if (ch.status === "accepted" && myRun?.status === "done" && oppRun && oppRun.status !== "done" && Date.now() - new Date(oppRun.updatedAt).getTime() > 120000) {
+      await ArenaChallenge.updateOne({ _id: ch._id, status: "accepted" }, { $set: { status: "done", draw: false, winner: req.user._id } });
+      ch.status = "done";
+      ch.draw = false;
+      ch.winner = req.user._id;
+    }
+    const data = {
+      state: ch.status === "waiting" ? "waiting" : ch.status === "done" ? "done" : "playing",
+      opponentName: opp?.fullName || null,
+      me: progressOf(myRun),
+      opp: oppRun ? progressOf(oppRun) : null,
+      total: ch.questions.length,
+    };
+    if (ch.status === "done") {
+      const myScore = myRun?.score ?? data.me.score;
+      data.result = {
+        result: ch.draw ? "draw" : String(ch.winner) === String(req.user._id) ? "win" : "lose",
+        myScore,
+        theirScore: oppRun?.score ?? data.opp?.score ?? 0,
+      };
+    }
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------- DELETE /arena/live/:id — huỷ khi đang chờ ghép cặp ----------
+async function liveCancel(req, res, next) {
+  try {
+    const ch = await ArenaChallenge.findOne({ _id: req.params.id, live: true, creator: req.user._id, status: "waiting" });
+    if (ch) {
+      await ArenaRun.deleteMany({ challenge: ch._id, status: "playing" });
+      await ArenaChallenge.deleteOne({ _id: ch._id });
+    }
+    res.json({ success: true, data: null });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { overview, classmates, startRun, createChallenge, answer, fifty, finish, liveQueue, liveStatus, liveCancel };

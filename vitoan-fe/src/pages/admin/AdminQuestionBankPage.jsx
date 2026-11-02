@@ -79,7 +79,7 @@ function QuestionPreview({ q }) {
       ) : (
         <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
           {(q.choices || []).map((c, i) => (
-            <li key={i} className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5", i === q.correctIndex ? "bg-primary/10 font-bold text-primary" : "bg-white text-slate-600")}>
+            <li key={i} className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5", (q.type === "multi_choice" ? (q.correctIndexes || []).includes(i) : i === q.correctIndex) ? "bg-primary/10 font-bold text-primary" : "bg-white text-slate-600")}>
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-500">{LETTERS[i]}</span>
               {c}
             </li>

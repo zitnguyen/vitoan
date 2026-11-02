@@ -10,6 +10,8 @@ const lessonSchema = new mongoose.Schema(
     order: { type: Number, default: 0 },
     isPublished: { type: Boolean, default: true },
     isTrial: { type: Boolean, default: false },
+    // Số câu bốc ngẫu nhiên mỗi lượt luyện tập của bài (0 = làm toàn bộ câu hỏi).
+    randomQuestionCount: { type: Number, default: 0, min: 0 },
     viewCount: { type: Number, default: 0 },
     likedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },

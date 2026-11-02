@@ -18,6 +18,7 @@ import LessonAvatar from "../../components/common/LessonAvatar.jsx";
 import { cn } from "../../lib/utils";
 import { Img3D } from "../../lib/icons3d.jsx";
 import { currentSemester, SEMESTER_RANGE } from "../../lib/semester.js";
+import { setLastSubject } from "../../lib/lastSubject.js";
 
 const SUBJECT_STYLES = {
   toan: {
@@ -124,6 +125,7 @@ export default function LessonListPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isStudent = user?.role === "Student";
+  useEffect(() => setLastSubject(subjectSlug), [subjectSlug]);
   const [grade, setGrade] = useState(null);
   const [grades, setGrades] = useState([]);
   const [subjects, setSubjects] = useState([]);

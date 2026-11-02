@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { testAttemptService } from "../../api/services";
 import ResultMissing from "../../components/quiz/ResultMissing.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
@@ -8,6 +8,7 @@ import QuizResultLayout from "../../components/quiz/QuizResultLayout.jsx";
 
 export default function TestResultPage() {
   const { attemptId } = useParams();
+  const location = useLocation();
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,10 +38,13 @@ export default function TestResultPage() {
         backTo={
           attempt.test?.chapter && attempt.test?.grade?.slug && attempt.test?.subject?.slug
             ? `/lop/${attempt.test.grade.slug}/${attempt.test.subject.slug}?chu-de=${attempt.test.chapter._id}`
-            : "/kiem-tra"
+            : `/kiem-tra${attempt.test?.subject?.slug ? `?mon=${attempt.test.subject.slug}` : ""}`
         }
         backLabel={attempt.test?.chapter ? "Về chủ đề" : "Về danh sách kiểm tra"}
         retryTo={attempt.test?._id ? `/kiem-tra/${attempt.test._id}` : undefined}
+        newBadges={location.state?.newBadges}
+        pointsEarned={location.state?.pointsEarned}
+        previousBest={location.state?.previousBest}
       />
     </QuizResultLayout>
   );

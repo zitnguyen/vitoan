@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Swords, Clock, Trophy, RotateCcw, Flame, Crown, Users, Gem, Target } from "../../components/ui/icons.jsx";
-import { arenaService, subjectService } from "../../api/services";
+import { arenaService, subjectService, notificationService } from "../../api/services";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
@@ -112,6 +112,12 @@ export default function ArenaPage() {
   const [score, setScore] = useState(0);
   const [remaining, setRemaining] = useState(20);
   const [result, setResult] = useState(null);
+  // --- đấu trực tiếp (realtime) ---
+  const [live, setLive] = useState(null); // { challengeId, opponentName }
+  const [oppProg, setOppProg] = useState(null);
+  const [liveFinal, setLiveFinal] = useState(null);
+  const [pending, setPending] = useState(null); // bộ câu hỏi đã nhận, chờ ghép cặp xong mới chơi
+  const [countdown, setCountdown] = useState(null);
   const qStart = useRef(0);
   const locked = useRef(false);
 
@@ -160,8 +166,93 @@ export default function ArenaPage() {
     setRemaining(data.secondsPerQuestion);
     locked.current = false;
     qStart.current = Date.now();
+    setLive(data.live ? { challengeId: data.challengeId, opponentName: data.opponentName || null } : null);
+    setOppProg(null);
+    setLiveFinal(null);
+    setPending(null);
+    setCountdown(null);
     setPhase("play");
   }
+
+  async function startLive() {
+    setError("");
+    setBusy(true);
+    try {
+      const data = (await arenaService.liveQueue(subjectId)).data;
+      setPending(data);
+      setLive({ challengeId: data.challengeId, opponentName: data.opponentName || null });
+      setCountdown(data.matched ? 3 : null);
+      setPhase("matching");
+    } catch (e) {
+      setError(e.apiMessage || "Chưa tìm được đối thủ lúc này");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelLive() {
+    if (live?.challengeId) arenaService.liveCancel(live.challengeId).catch(() => {});
+    setPending(null);
+    setLive(null);
+    setPhase("lobby");
+  }
+
+  // Chờ ghép cặp: hỏi máy chủ mỗi 1,5 giây; có đối thủ thì đếm ngược 3-2-1 rồi cùng vào trận.
+  useEffect(() => {
+    if (phase !== "matching" || !pending || countdown !== null) return undefined;
+    const t = setInterval(async () => {
+      try {
+        const st = (await arenaService.liveStatus(pending.challengeId)).data;
+        if (st.state === "expired") {
+          setError("Chưa có bạn nào cùng tìm trận. Thử lại sau nhé!");
+          setPending(null);
+          setPhase("lobby");
+        } else if (st.state !== "waiting") {
+          setLive((l) => ({ ...l, opponentName: st.opponentName }));
+          setCountdown(3);
+        }
+      } catch {
+        // mạng chập chờn: thử lại ở lần sau
+      }
+    }, 1500);
+    return () => clearInterval(t);
+  }, [phase, pending, countdown]);
+
+  useEffect(() => {
+    if (phase !== "matching" || countdown === null) return undefined;
+    const t = setTimeout(() => {
+      if (countdown <= 1) beginRun(pending);
+      else setCountdown(countdown - 1);
+    }, 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, countdown, pending]);
+
+  // Đang chơi trận trực tiếp: cập nhật tiến độ của đối thủ.
+  useEffect(() => {
+    if (phase !== "play" || !live?.challengeId) return undefined;
+    const t = setInterval(() => {
+      arenaService.liveStatus(live.challengeId).then((r) => setOppProg(r.data)).catch(() => {});
+    }, 1500);
+    return () => clearInterval(t);
+  }, [phase, live?.challengeId]);
+
+  // Đã xong mà bạn kia chưa xong: chờ kết quả cuối.
+  useEffect(() => {
+    if (phase !== "result" || !result?.duel?.live || result.duel.result || liveFinal) return undefined;
+    const t = setInterval(() => {
+      arenaService
+        .liveStatus(result.duel.challengeId)
+        .then((r) => {
+          if (r.data.state === "done" && r.data.result) {
+            setLiveFinal(r.data.result);
+            refreshUser?.().catch?.(() => {});
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(t);
+  }, [phase, result, liveFinal, refreshUser]);
 
   async function startSolo() {
     setError("");
@@ -288,6 +379,33 @@ export default function ArenaPage() {
 
   if (!user?.grade) return <Navigate to="/chon-lop" replace />;
 
+  // ====================== MÀN GHÉP CẶP ======================
+  if (phase === "matching") {
+    return (
+      <div className="page">
+        <div className="mx-auto max-w-xl rounded-[2rem] bg-white p-8 text-center shadow-elevation-2">
+          <OwlMascot className="mx-auto h-24 w-24" />
+          {countdown === null ? (
+            <>
+              <p className="mt-3 font-display text-2xl font-black text-slate-800">Đang tìm đối thủ… 🔎</p>
+              <p className="mt-1 font-semibold text-slate-500">Chờ một bạn cùng lớp, cùng môn {subjectName}. Tối đa 2 phút.</p>
+              <div className="mt-4 flex justify-center"><Spinner /></div>
+              <button type="button" onClick={cancelLive} className="mt-5 rounded-full border-2 border-slate-200 px-6 py-2.5 font-display font-black text-slate-600 hover:border-red-300 hover:text-red-500">
+                Huỷ tìm trận
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 font-display text-2xl font-black text-violet-700">Đã tìm thấy đối thủ! ⚔️</p>
+              <p className="font-semibold text-slate-600">{live?.opponentName || "Một bạn cùng lớp"}</p>
+              <p className="mt-4 font-display text-8xl font-black text-primary">{countdown}</p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ====================== MÀN CHƠI ======================
   if (phase === "play" && run) {
     const q = run.questions[idx];
@@ -333,6 +451,19 @@ export default function ArenaPage() {
                 </button>
               </div>
             </div>
+
+            {live && (
+              <div className="mt-4 flex items-center gap-3 rounded-2xl bg-violet-50 px-4 py-2.5 ring-1 ring-violet-100">
+                <span className="text-xl">⚔️</span>
+                <p className="min-w-0 flex-1 truncate text-sm font-bold text-violet-800">
+                  {live.opponentName || oppProg?.opponentName || "Đối thủ"}: {oppProg?.opp ? `${oppProg.opp.answered}/${run.total} câu · ${oppProg.opp.score} đúng` : "đang chơi…"}
+                  {oppProg?.opp?.done && " ✅ đã xong"}
+                </p>
+                <div className="h-2.5 w-32 overflow-clip rounded-full bg-violet-200">
+                  <div className="h-full rounded-full bg-violet-500 transition-all duration-500" style={{ width: `${((oppProg?.opp?.answered || 0) / run.total) * 100}%` }} />
+                </div>
+              </div>
+            )}
 
             {/* Câu hỏi */}
             {q.imageUrl && <img src={q.imageUrl} alt="" className="mx-auto mt-5 max-h-56 rounded-2xl" />}
@@ -394,9 +525,16 @@ export default function ArenaPage() {
 
   // ====================== MÀN KẾT QUẢ ======================
   if (phase === "result" && result) {
-    const duel = result.duel;
+    const rawDuel = result.duel;
+    const duel = liveFinal
+      ? { ...rawDuel, role: "opponent", result: liveFinal.result, theirScore: liveFinal.theirScore }
+      : rawDuel?.live && rawDuel.result
+      ? { ...rawDuel, role: "opponent" }
+      : rawDuel;
     const banner =
-      duel?.role === "opponent"
+      rawDuel?.live && !duel.result
+        ? { text: "Em đã xong! Đang chờ bạn ấy ⏳", cls: "from-violet-500 to-indigo-600", sub: "Kết quả sẽ hiện ngay khi bạn ấy hoàn thành" }
+        : duel?.role === "opponent"
         ? duel.result === "win"
           ? { text: "Em đã THẮNG! 🏆", cls: "from-amber-400 to-orange-500", sub: `${result.score} – ${duel.theirScore} câu đúng` }
           : duel.result === "draw"
@@ -562,7 +700,15 @@ export default function ArenaPage() {
         {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 font-semibold text-red-600">{error}</p>}
 
         {/* 3 chế độ chơi */}
-        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
+          <div className="flex flex-col rounded-[1.75rem] bg-gradient-to-br from-rose-50 to-pink-50 p-6 shadow-elevation-1 ring-1 ring-rose-100">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-200 text-3xl">🔴</span>
+            <h2 className="mt-3 font-display text-2xl font-black text-slate-800">Đấu trực tiếp</h2>
+            <p className="mt-1 flex-1 text-slate-500">Ghép cặp với một bạn cùng lớp đang online. Hai bạn chơi cùng bộ câu hỏi, cùng lúc và thấy tiến độ của nhau thời gian thực.</p>
+            <button type="button" onClick={startLive} disabled={busy || !subjectId} className="mt-4 rounded-full bg-rose-500 px-6 py-3 font-display text-lg font-black text-white shadow-[0_4px_0_0_#be123c] transition hover:-translate-y-0.5 disabled:opacity-60">
+              {busy ? "Đang vào..." : "Tìm đối thủ"}
+            </button>
+          </div>
           <div className="flex flex-col rounded-[1.75rem] bg-white p-6 shadow-elevation-1">
             <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-3xl">⚡</span>
             <h2 className="mt-3 font-display text-2xl font-black text-slate-800">Luyện nhanh</h2>
@@ -632,6 +778,36 @@ export default function ArenaPage() {
             </ul>
           </section>
         )}
+
+        {/* Thông báo đấu trường */}
+        <section className="mt-6 rounded-[1.75rem] bg-white p-6 shadow-elevation-1">
+          <h2 className="flex items-center gap-2 font-display text-xl font-black text-slate-800">
+            🔔 Thông báo đấu trường
+            {ov?.notifications?.some((n) => !n.read) && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-black text-white">mới</span>}
+          </h2>
+          {!ov ? (
+            <Spinner />
+          ) : ov.notifications?.length ? (
+            <ul className="mt-3 grid gap-2 lg:grid-cols-2">
+              {ov.notifications.map((n) => (
+                <li
+                  key={n._id}
+                  onClick={() => !n.read && notificationService.markRead(n._id).then(loadOverview).catch(() => {})}
+                  className={cn("flex cursor-default items-start gap-3 rounded-2xl px-4 py-3", n.read ? "bg-slate-50" : "bg-amber-50 ring-1 ring-amber-200")}
+                >
+                  <span className="text-2xl">{n.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-slate-800">{n.title}</p>
+                    {n.body && <p className="text-sm font-semibold text-slate-500">{n.body}</p>}
+                    <p className="text-xs text-slate-400">{new Date(n.createdAt).toLocaleString("vi-VN")}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm font-semibold text-slate-400">Chưa có thông báo nào — thách đấu hoặc đấu trực tiếp để nhận tin nhé!</p>
+          )}
+        </section>
 
         <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
           {/* Bảng xếp hạng */}

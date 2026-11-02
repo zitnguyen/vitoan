@@ -5,6 +5,24 @@ const { gradeAnswer } = require("../utils/grading");
 const { chatCompletion } = require("../utils/openai");
 const { buildTestFeedback } = require("../utils/analysis");
 const { learningStatus } = require("./testController");
+const User = require("../models/User");
+const { checkAndAwardBadges } = require("./attemptController");
+
+// Điểm tích luỹ khi làm bài kiểm tra: cũng chỉ cộng phần tiến bộ so với lần tốt nhất trước đó của
+// cùng đề (15 điểm/câu đúng thêm, +30 lần đầu đạt tuyệt đối) để không "cày" một đề dễ.
+const TEST_POINTS_PER_CORRECT = 15;
+const TEST_PERFECT_BONUS = 30;
+
+async function testPointsEarned(studentId, attempt) {
+  const previous = await TestAttempt.find({ student: studentId, test: attempt.test, _id: { $ne: attempt._id } })
+    .select("score totalQuestions")
+    .lean();
+  const prevBest = previous.reduce((m, a) => Math.max(m, a.score), 0);
+  const hadPerfect = previous.some((a) => a.totalQuestions > 0 && a.score === a.totalQuestions);
+  let points = Math.max(0, attempt.score - prevBest) * TEST_POINTS_PER_CORRECT;
+  if (attempt.totalQuestions > 0 && attempt.score === attempt.totalQuestions && !hadPerfect) points += TEST_PERFECT_BONUS;
+  return { points, previousBest: prevBest };
+}
 
 async function submit(req, res, next) {
   try {
@@ -33,7 +51,7 @@ async function submit(req, res, next) {
       const question = questionMap.get(String(id));
       const a = givenById.get(String(id)) || {};
       const correct = gradeAnswer(question, a);
-      return { question: id, selectedIndex: a.selectedIndex ?? -1, textAnswer: a.textAnswer || "", correct };
+      return { question: id, selectedIndex: a.selectedIndex ?? -1, selectedIndexes: a.selectedIndexes || [], textAnswer: a.textAnswer || "", correct };
     });
     const score = gradedAnswers.filter((a) => a.correct).length;
 
@@ -46,7 +64,21 @@ async function submit(req, res, next) {
       durationSeconds: Math.max(0, Math.min(Number(durationSeconds) || 0, 6 * 3600)),
     });
 
-    res.status(201).json({ success: true, data: attempt });
+    // Admin làm thử không cộng điểm/huy hiệu.
+    let pointsEarned = 0;
+    let previousBest = 0;
+    let totalPoints;
+    let newBadges = [];
+    if (req.user.role === "Student") {
+      ({ points: pointsEarned, previousBest } = await testPointsEarned(req.user._id, attempt));
+      if (pointsEarned > 0) {
+        const updated = await User.findByIdAndUpdate(req.user._id, { $inc: { points: pointsEarned } }, { returnDocument: "after" }).select("points");
+        totalPoints = updated.points;
+      }
+      newBadges = await checkAndAwardBadges(req.user._id);
+    }
+
+    res.status(201).json({ success: true, data: attempt, newBadges, pointsEarned, previousBest, totalPoints });
   } catch (err) {
     next(err);
   }
@@ -55,7 +87,7 @@ async function submit(req, res, next) {
 async function getOne(req, res, next) {
   try {
     const attempt = await TestAttempt.findById(req.params.id)
-      .populate({ path: "answers.question", select: "type text imageUrl choices correctIndex correctText explanation" })
+      .populate({ path: "answers.question", select: "type text imageUrl choices correctIndex correctIndexes correctText explanation lesson", populate: { path: "lesson", select: "title order chapter", populate: { path: "chapter", select: "title order" } } })
       .populate({
         path: "test",
         select: "title testType level subject grade chapter",

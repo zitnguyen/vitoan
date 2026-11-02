@@ -41,6 +41,7 @@ const POINTS_PER_CORRECT = 10;
 const PERFECT_BONUS = 20;
 
 function toPayloadAnswer(question, value) {
+  if (question.type === "multi_choice") return { question: question._id, selectedIndexes: Array.isArray(value) ? value : [] };
   return FILL_TYPES.includes(question.type)
     ? { question: question._id, textAnswer: (value || "").trim() }
     : { question: question._id, selectedIndex: value ?? -1 };
@@ -108,7 +109,7 @@ export default function PlayQuizPage() {
             lessonService.getOne(lessonId),
             questionService.listByLesson(lessonId),
           ]);
-          info = { title: lessonRes.data.title, lessonId, subject: lessonRes.data.subject, grade: lessonRes.data.grade };
+          info = { title: lessonRes.data.title, lessonId, subject: lessonRes.data.subject, grade: lessonRes.data.grade, randomCount: lessonRes.data.randomQuestionCount || 0 };
           qs = questionsRes.data;
         }
         if (cancelled) return;
@@ -132,13 +133,14 @@ export default function PlayQuizPage() {
         }
         const byId = new Map(qs.map((q) => [q._id, q]));
         const ordered = progress?.questionOrder?.map((id) => byId.get(id)).filter(Boolean) || [];
-        if (progress && ordered.length === qs.length && progress.answers.length > 0) {
+        if (progress && ordered.length > 0 && ordered.length === progress.questionOrder.length && progress.answers.length > 0) {
           const restoredAnswers = {};
           const restoredChecked = {};
           for (const a of progress.answers) {
             const q = byId.get(a.question);
             if (!q) continue;
-            restoredAnswers[a.question] = FILL_TYPES.includes(q.type) ? a.textAnswer : a.selectedIndex;
+            restoredAnswers[a.question] =
+              q.type === "multi_choice" ? a.selectedIndexes || [] : FILL_TYPES.includes(q.type) ? a.textAnswer : a.selectedIndex;
             restoredChecked[a.question] = { correct: a.correct };
           }
           setQuestions(ordered);
@@ -148,7 +150,9 @@ export default function PlayQuizPage() {
           elapsedRef.current = progress.elapsedSeconds || 0;
           setResumed(true);
         } else {
-          setQuestions(shuffleArray(qs));
+          // Bài có đặt "số câu ngẫu nhiên" → mỗi lượt chỉ bốc ngẫu nhiên từng đó câu.
+          const picked = shuffleArray(qs);
+          setQuestions(info.randomCount > 0 && info.randomCount < picked.length ? picked.slice(0, info.randomCount) : picked);
         }
       } catch (err) {
         if (!cancelled) setLoadError(err.apiMessage || "Không thể tải bài luyện tập");
@@ -204,7 +208,11 @@ export default function PlayQuizPage() {
     if (isStudent) {
       await attemptService.clearProgress({ lesson: meta.lessonId, practiceSet: practiceSetId || undefined }).catch(() => {});
     }
-    setQuestions(shuffleArray(allQuestions));
+    {
+      const picked = shuffleArray(allQuestions);
+      const n = meta?.randomCount || 0;
+      setQuestions(n > 0 && n < picked.length ? picked.slice(0, n) : picked);
+    }
     setAnswers({});
     setChecked({});
     setHints({});
@@ -279,7 +287,9 @@ export default function PlayQuizPage() {
 
   const question = questions[current];
   const isFillQuestion = FILL_TYPES.includes(question.type);
+  const isMulti = question.type === "multi_choice";
   const selected = answers[question._id];
+  const isPicked = (idx) => (isMulti ? Array.isArray(selected) && selected.includes(idx) : selected === idx);
   const letters = ["A", "B", "C", "D", "E", "F"];
   const currentResult = checked[question._id];
   const isLocked = !!currentResult;
@@ -287,6 +297,7 @@ export default function PlayQuizPage() {
   function isAnswered(q) {
     const v = answers[q._id];
     if (FILL_TYPES.includes(q.type)) return typeof v === "string" && v.trim().length > 0;
+    if (q.type === "multi_choice") return Array.isArray(v) && v.length > 0;
     return v !== undefined;
   }
   const answeredCount = questions.filter(isAnswered).length;
@@ -303,6 +314,14 @@ export default function PlayQuizPage() {
 
   function selectChoice(index) {
     if (isLocked) return;
+    if (isMulti) {
+      setAnswers((a) => {
+        const cur = Array.isArray(a[question._id]) ? a[question._id] : [];
+        const next = cur.includes(index) ? cur.filter((i) => i !== index) : [...cur, index].sort();
+        return { ...a, [question._id]: next };
+      });
+      return;
+    }
     setAnswers((a) => ({ ...a, [question._id]: index }));
   }
 
@@ -328,7 +347,11 @@ export default function PlayQuizPage() {
   async function handleCheck() {
     setChecking(true);
     try {
-      const payload = isFillQuestion ? { textAnswer: (selected || "").trim() } : { selectedIndex: selected };
+      const payload = isMulti
+        ? { selectedIndexes: selected || [] }
+        : isFillQuestion
+        ? { textAnswer: (selected || "").trim() }
+        : { selectedIndex: selected };
       const res = await questionService.checkAnswer(question._id, payload);
       const nextChecked = { ...checked, [question._id]: res.data };
       setChecked(nextChecked);
@@ -522,6 +545,7 @@ export default function PlayQuizPage() {
           )}
 
           {!isFillQuestion && <p className="mt-4 whitespace-pre-line text-2xl font-semibold leading-relaxed text-slate-800">{question.text}</p>}
+          {isMulti && <p className="mt-2 inline-block rounded-full bg-violet-100 px-3 py-1 text-sm font-bold text-violet-700">Chọn tất cả đáp án đúng (có thể nhiều hơn 1)</p>}
 
           {(question.type === "listen_choice" || question.type === "listen_fill") && (
             <button
@@ -568,8 +592,8 @@ export default function PlayQuizPage() {
           ) : (
             <div className="mt-5 grid grid-cols-2 gap-3 lg:max-h-[55vh] lg:overflow-y-auto lg:pr-1">
               {question.choices.map((choice, idx) => {
-                const isCorrectChoice = isLocked && idx === currentResult.correctIndex;
-                const isWrongPick = isLocked && idx === selected && !currentResult.correct;
+                const isCorrectChoice = isLocked && (isMulti ? (currentResult.correctIndexes || []).includes(idx) : idx === currentResult.correctIndex);
+                const isWrongPick = isLocked && isPicked(idx) && !isCorrectChoice;
                 return (
                   <div key={idx} className="relative">
                     <button
@@ -577,16 +601,22 @@ export default function PlayQuizPage() {
                       disabled={isLocked}
                       onClick={() => selectChoice(idx)}
                       className={cn(
-                        "flex min-h-[4.5rem] w-full flex-col items-center justify-center gap-1 rounded-2xl px-9 py-3 text-center text-lg font-bold ring-2 transition",
+                        "flex min-h-[4.5rem] w-full flex-col items-center justify-center gap-1 rounded-2xl px-12 py-3 text-center text-lg font-bold ring-2 transition",
                         isCorrectChoice && "border-primary bg-primary/10 text-primary",
                         isWrongPick && "border-red-400 bg-red-50 text-red-600",
                         !isLocked &&
-                          (selected === idx
+                          (isPicked(idx)
                             ? "-translate-y-0.5 bg-sky-50 text-sky-700 ring-sky-400 shadow-[0_4px_0_0_#7dd3fc]"
                             : "bg-white text-slate-700 ring-slate-200 shadow-[0_4px_0_0_#e2e8f0] hover:-translate-y-0.5 hover:ring-sky-300")
                       )}
                     >
-                      <span className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-black text-slate-500">
+                      <span
+                        className={cn(
+                          "absolute left-2.5 top-2.5 flex h-8 w-8 items-center justify-center text-base font-black",
+                          isMulti ? "rounded-lg" : "rounded-full",
+                          isPicked(idx) ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-500"
+                        )}
+                      >
                         {letters[idx]}
                       </span>
                       {(isCorrectChoice || isWrongPick) && (
@@ -644,7 +674,13 @@ export default function PlayQuizPage() {
         {isLocked && showFeedback && (
           <AnswerFeedbackPopup
             result={currentResult}
-            correctAnswer={isFillQuestion ? currentResult.correctText : question.choices[currentResult.correctIndex]}
+            correctAnswer={
+              isFillQuestion
+                ? currentResult.correctText
+                : isMulti
+                ? (currentResult.correctIndexes || []).map((i) => question.choices[i]).join(" · ")
+                : question.choices[currentResult.correctIndex]
+            }
             primaryLabel={
               allChecked
                 ? submitting

@@ -18,22 +18,33 @@ async function breakdownByLesson(answers) {
   // Câu riêng của đề kiểm tra không thuộc bài học nào → bỏ qua khi gom theo bài.
   const lessonOfQuestion = new Map(questions.filter((q) => q.lesson).map((q) => [String(q._id), String(q.lesson)]));
   const lessons = await Lesson.find({ _id: { $in: [...new Set(lessonOfQuestion.values())] } })
-    .select("title chapter")
+    .select("title chapter order")
     .lean();
   const lessonMap = new Map(lessons.map((l) => [String(l._id), l]));
+  const chapters = await Chapter.find({ _id: { $in: lessons.map((l) => l.chapter).filter(Boolean) } }).select("order").lean();
+  const chapterOrder = new Map(chapters.map((c) => [String(c._id), c.order ?? 0]));
 
   const groups = new Map();
   for (const a of answers) {
     const lessonId = lessonOfQuestion.get(String(a.question?._id || a.question));
     if (!lessonId) continue;
-    const g = groups.get(lessonId) || { lesson: lessonId, title: lessonMap.get(lessonId)?.title || "", total: 0, wrong: 0 };
+    const l = lessonMap.get(lessonId);
+    const g = groups.get(lessonId) || {
+      lesson: lessonId,
+      title: l?.title || "",
+      sortKey: [l?.chapter ? chapterOrder.get(String(l.chapter)) ?? 0 : 999, l?.order ?? 0],
+      total: 0,
+      wrong: 0,
+    };
     g.total += 1;
     if (!a.correct) g.wrong += 1;
     groups.set(lessonId, g);
   }
   return [...groups.values()]
     .map((g) => ({ ...g, correctPercent: Math.round(((g.total - g.wrong) / g.total) * 100) }))
-    .sort((x, y) => x.correctPercent - y.correctPercent);
+    // Sắp theo thứ tự bài trong chương trình (chủ đề → bài), không theo tỉ lệ đúng.
+    .sort((x, y) => x.sortKey[0] - y.sortKey[0] || x.sortKey[1] - y.sortKey[1])
+    .map(({ sortKey, ...g }, i) => ({ ...g, position: i + 1 }));
 }
 
 // Nhận xét cho 1 lượt kiểm tra, có so sánh với các lượt trước của cùng bài kiểm tra.
@@ -103,7 +114,7 @@ async function weakKnowledge(attempts, { subject } = {}) {
     }
   }
   const questions = await Question.find({ _id: { $in: [...tally.keys()] } })
-    .select("lesson text type choices correctIndex correctText")
+    .select("lesson text type choices correctIndex correctIndexes correctText")
     .lean();
   const lessonIds = [...new Set(questions.filter((q) => q.lesson).map((q) => String(q.lesson)))];
   const lessonFilter = { _id: { $in: lessonIds } };
@@ -140,7 +151,7 @@ async function weakKnowledge(attempts, { subject } = {}) {
     byLesson.set(key, g);
     if (t.wrong > 0) {
       questionStats.push({
-        question: { _id: q._id, text: q.text, type: q.type, choices: q.choices, correctIndex: q.correctIndex, correctText: q.correctText },
+        question: { _id: q._id, text: q.text, type: q.type, choices: q.choices, correctIndex: q.correctIndex, correctIndexes: q.correctIndexes, correctText: q.correctText },
         lessonTitle: lesson.title,
         lesson: key,
         total: t.total,

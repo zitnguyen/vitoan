@@ -5,6 +5,7 @@ const {
   submitGuest,
   getOne,
   myHistory,
+  practiceSummary,
   completedLessons,
   lessonStatus,
   stats,
@@ -32,6 +33,7 @@ const guestLimiter = rateLimit({
 router.post("/guest", guestLimiter, submitGuest);
 router.post("/", protect, authorize("Student"), submit);
 router.get("/me", protect, authorize("Student"), myHistory);
+router.get("/practice-summary", protect, authorize("Student"), practiceSummary);
 router.get("/completed-lessons", protect, authorize("Student"), completedLessons);
 router.get("/lesson-status", protect, authorize("Student"), lessonStatus);
 router.get("/stats", protect, authorize("Student"), stats);

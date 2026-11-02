@@ -1,5 +1,5 @@
 const express = require("express");
-const { overview, classmates, startRun, createChallenge, answer, fifty, finish } = require("../controllers/arenaController");
+const { overview, classmates, startRun, createChallenge, answer, fifty, finish, liveQueue, liveStatus, liveCancel } = require("../controllers/arenaController");
 const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
@@ -12,5 +12,8 @@ router.post("/runs/:id/answer", answer);
 router.post("/runs/:id/fifty", fifty);
 router.post("/runs/:id/finish", finish);
 router.post("/challenges", createChallenge);
+router.post("/live", liveQueue);
+router.get("/live/:id", liveStatus);
+router.delete("/live/:id", liveCancel);
 
 module.exports = router;

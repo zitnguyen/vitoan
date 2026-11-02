@@ -1,3 +1,4 @@
+import { setLastSubject } from "../../lib/lastSubject.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -75,6 +76,8 @@ export default function LessonContentPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
+  const lessonSubjectSlug = lesson?.subject?.slug;
+  useEffect(() => setLastSubject(lessonSubjectSlug), [lessonSubjectSlug]);
   useEffect(() => {
     setLoading(true);
     setLoadError("");

@@ -28,6 +28,7 @@ import QuestionImage from "../../components/quiz/QuestionImage.jsx";
 import { speakQuestionText, stopSpeaking, FILL_TYPES } from "../../lib/speech.js";
 import { cn, shuffleArray } from "../../lib/utils";
 import { useDialog } from "../../context/DialogContext.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import { Img3D } from "../../lib/icons3d.jsx";
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
@@ -44,6 +45,7 @@ function formatDuration(seconds) {
 
 export default function TestTakingPage() {
   const dialog = useDialog();
+  const { refreshUser } = useAuth();
   const { testId } = useParams();
   const navigate = useNavigate();
   const [test, setTest] = useState(null);
@@ -137,7 +139,9 @@ export default function TestTakingPage() {
         test: testId,
         durationSeconds: elapsed,
         answers: test.questions.map((q) =>
-          FILL_TYPES.includes(q.type)
+          q.type === "multi_choice"
+            ? { question: q._id, selectedIndexes: Array.isArray(answers[q._id]) ? answers[q._id] : [] }
+            : FILL_TYPES.includes(q.type)
             ? { question: q._id, textAnswer: (answers[q._id] || "").trim() }
             : { question: q._id, selectedIndex: answers[q._id] ?? -1 }
         ),
@@ -148,12 +152,13 @@ export default function TestTakingPage() {
       } catch {
         // bỏ qua
       }
-      navigate(`/kiem-tra/ket-qua/${res.data._id}`, { replace: true, state: { newBadges: res.newBadges } });
+      if (res.pointsEarned > 0) refreshUser?.().catch?.(() => {});
+      navigate(`/kiem-tra/ket-qua/${res.data._id}`, { replace: true, state: { newBadges: res.newBadges, pointsEarned: res.pointsEarned, previousBest: res.previousBest } });
     } catch {
       submittedRef.current = false;
       setSubmitting(false);
     }
-  }, [answers, elapsed, navigate, test, testId]);
+  }, [answers, elapsed, navigate, refreshUser, test, testId]);
 
   // Hết giờ → tự nộp bài.
   const timeUp = started && test?.timeLimitSeconds > 0 && elapsed >= test.timeLimitSeconds;
@@ -178,7 +183,7 @@ export default function TestTakingPage() {
   const backTo =
     test.chapter && test.grade?.slug && test.subject?.slug
       ? `/lop/${test.grade.slug}/${test.subject.slug}?chu-de=${test.chapter._id}`
-      : "/kiem-tra";
+      : `/kiem-tra${test.subject?.slug ? `?mon=${test.subject.slug}` : ""}`;
   const subtitle = [
     test.subject?.name,
     test.grade?.name,
@@ -256,6 +261,15 @@ export default function TestTakingPage() {
                 </div>
               </div>
             )}
+            {history.length > 0 && (
+              <Link
+                to={`/kiem-tra/ket-qua/${history[0]._id}`}
+                className="mb-4 flex items-center justify-center gap-2 rounded-2xl border-2 border-secondary/40 bg-secondary/5 px-4 py-3 font-display font-bold text-secondary transition hover:bg-secondary/10"
+              >
+                <History className="h-5 w-5" /> Quay lại bản lưu bài kiểm tra mới nhất ({history[0].score}/{history[0].totalQuestions} ·{" "}
+                {new Date(history[0].createdAt).toLocaleString("vi-VN")})
+              </Link>
+            )}
             <ul className="space-y-1.5 text-sm text-slate-600">
               <li>• Chọn số câu trong “Danh sách câu hỏi” để chuyển nhanh; có thể quay lại đổi đáp án bất cứ lúc nào.</li>
               <li>• {test.timeLimitSeconds > 0 ? "Hết thời gian, hệ thống sẽ tự nộp bài." : "Không giới hạn thời gian, làm cẩn thận nhé."}</li>
@@ -272,13 +286,16 @@ export default function TestTakingPage() {
   const total = test.questions.length;
   const question = test.questions[current];
   const isFillQuestion = FILL_TYPES.includes(question.type);
+  const isMulti = question.type === "multi_choice";
   const selected = answers[question._id];
+  const isPicked = (idx) => (isMulti ? Array.isArray(selected) && selected.includes(idx) : selected === idx);
   const remaining = test.timeLimitSeconds > 0 ? test.timeLimitSeconds - elapsed : null;
   const lowTime = remaining !== null && remaining <= 60;
 
   function isAnswered(q) {
     const v = answers[q._id];
     if (FILL_TYPES.includes(q.type)) return typeof v === "string" && v.trim().length > 0;
+    if (q.type === "multi_choice") return Array.isArray(v) && v.length > 0;
     return v !== undefined;
   }
   const answeredCount = test.questions.filter(isAnswered).length;
@@ -296,6 +313,11 @@ export default function TestTakingPage() {
 
   function setAnswer(value) {
     setAnswers((a) => ({ ...a, [question._id]: value }));
+  }
+  function pickChoice(idx) {
+    if (!isMulti) return setAnswer(idx);
+    const cur = Array.isArray(selected) ? selected : [];
+    setAnswer(cur.includes(idx) ? cur.filter((i) => i !== idx) : [...cur, idx].sort());
   }
 
 
@@ -357,7 +379,7 @@ export default function TestTakingPage() {
             <div className="p-5 sm:p-6">
               {/* Gắn cờ câu phân vân để quay lại xem sau */}
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-400">{isFillQuestion ? "Điền đáp án vào ô trống" : "Chọn một đáp án đúng"}</p>
+                <p className="text-sm font-semibold text-slate-400">{isFillQuestion ? "Điền đáp án vào ô trống" : isMulti ? "Chọn TẤT CẢ đáp án đúng (có thể nhiều hơn 1)" : "Chọn một đáp án đúng"}</p>
                 <button
                   id="flag-toggle"
                   type="button"
@@ -415,14 +437,14 @@ export default function TestTakingPage() {
               {!isFillQuestion && (
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {question.choices.map((choice, idx) => {
-                    const active = selected === idx;
+                    const active = isPicked(idx);
                     const tf = question.type === "true_false";
                     const TfIcon = /^đúng$/i.test(choice.trim()) ? ThumbsUp : ThumbsDown;
                     return (
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => setAnswer(idx)}
+                        onClick={() => pickChoice(idx)}
                         className={cn(
                           "flex items-stretch overflow-clip rounded-2xl text-left text-xl font-bold text-slate-700 ring-2 ring-slate-200 shadow-[0_4px_0_0_#e2e8f0] transition",
                           active ? "-translate-y-0.5 bg-sky-50 text-sky-700 ring-sky-400 shadow-[0_4px_0_0_#7dd3fc]" : "bg-white hover:-translate-y-0.5 hover:ring-sky-300"
@@ -430,7 +452,7 @@ export default function TestTakingPage() {
                       >
                         <span
                           className={cn(
-                            "flex w-12 shrink-0 items-center justify-center",
+                            "flex w-16 shrink-0 items-center justify-center",
                             active ? "bg-primary text-white" : "bg-slate-100 text-slate-400"
                           )}
                         >
@@ -439,11 +461,12 @@ export default function TestTakingPage() {
                           ) : (
                             <span
                               className={cn(
-                                "flex h-6 w-6 items-center justify-center rounded-full border-2 text-xs font-bold",
-                                active ? "border-white" : "border-slate-300"
+                                "flex h-10 w-10 items-center justify-center border-2 text-xl font-black",
+                                isMulti ? "rounded-lg" : "rounded-full",
+                                active ? "border-white bg-white/20" : "border-slate-300"
                               )}
                             >
-                              {active ? <span className="h-2.5 w-2.5 rounded-full bg-white" /> : LETTERS[idx]}
+                              {LETTERS[idx]}
                             </span>
                           )}
                         </span>

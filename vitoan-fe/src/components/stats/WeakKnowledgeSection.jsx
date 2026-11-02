@@ -145,7 +145,7 @@ export default function WeakKnowledgeSection() {
                 {weak.frequentWrongQuestions.map((item) => {
                   const q = item.question;
                   const isFill = q.type === "fill_blank" || q.type === "listen_fill";
-                  const answer = isFill ? q.correctText : q.choices?.[q.correctIndex];
+                  const answer = isFill ? q.correctText : q.type === "multi_choice" ? (q.correctIndexes || []).map((i) => q.choices?.[i]).join(" · ") : q.choices?.[q.correctIndex];
                   return (
                     <div key={q._id} className="rounded-xl bg-slate-50 p-3">
                       <p className="font-semibold text-slate-800">{q.text.replace(/___/g, "…").replace(/\n/g, " ")}</p>

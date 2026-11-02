@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { History, Inbox, ChevronRight, Award, ClipboardCheck, BookOpen } from "../../components/ui/icons.jsx";
+import { History, Inbox, ChevronRight, Award, ClipboardCheck, BookOpen, CheckCircle2, XCircle, TrendingUp, MessageSquareQuote } from "../../components/ui/icons.jsx";
 import { attemptService, badgeService, testAttemptService } from "../../api/services";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
@@ -53,7 +53,103 @@ function AttemptCard({ attempt, subtitle, to, accent }) {
   );
 }
 
+function fmtMinutes(seconds) {
+  const m = Math.round(seconds / 60);
+  return m >= 60 ? `${Math.floor(m / 60)} giờ ${m % 60} phút` : `${m} phút`;
+}
+
+// Thống kê phần luyện tập: số lần làm, đúng/sai, bài hay làm & bài yếu, 14 ngày gần đây, nhận xét.
+function PracticeSummary({ summary }) {
+  if (!summary || summary.totalAttempts === 0) return null;
+  const maxDay = Math.max(1, ...summary.recentDays.map((d) => d.attempts));
+  const tiles = [
+    { label: "Số lần luyện tập", value: summary.totalAttempts, icon: BookOpen, tone: "bg-primary/10 text-primary" },
+    { label: "Câu đúng", value: summary.correct, icon: CheckCircle2, tone: "bg-emerald-100 text-emerald-600" },
+    { label: "Câu sai", value: summary.wrong, icon: XCircle, tone: "bg-rose-100 text-rose-500" },
+    { label: "Tỉ lệ đúng", value: `${summary.accuracy}%`, icon: TrendingUp, tone: "bg-violet-100 text-violet-600" },
+  ];
+  return (
+    <section className="mt-5">
+      <h2 className="section-title">
+        <TrendingUp className="h-5 w-5 text-primary" /> Thống kê luyện tập
+      </h2>
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {tiles.map((t) => (
+          <div key={t.label} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-elevation-1">
+            <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", t.tone)}>
+              <t.icon className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="font-display text-2xl font-black text-slate-800">{t.value}</p>
+              <p className="text-caption text-slate-500">{t.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-3">
+        <div className="rounded-2xl bg-white p-5 shadow-elevation-1 lg:col-span-2">
+          <p className="font-display font-bold text-slate-800">14 ngày gần đây</p>
+          <div className="mt-3 flex h-28 items-end gap-1.5">
+            {summary.recentDays.map((d) => (
+              <div key={d.day} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${d.day}: ${d.attempts} lượt`}>
+                <span className="text-[10px] font-bold text-slate-400">{d.attempts || ""}</span>
+                <span
+                  className={cn("w-full rounded-t-md", d.attempts ? "bg-primary/70" : "bg-slate-100")}
+                  style={{ height: `${d.attempts ? Math.max(12, (d.attempts / maxDay) * 80) : 6}px` }}
+                />
+                <span className="text-[10px] text-slate-400">{d.day.slice(8)}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-caption text-slate-500">
+            Luyện tập {summary.activeDays}/14 ngày · tổng thời gian {fmtMinutes(summary.seconds)}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-violet-50 p-5 ring-1 ring-violet-100">
+          <p className="flex items-center gap-1.5 font-display font-bold text-violet-700">
+            <MessageSquareQuote className="h-5 w-5" /> Nhận xét
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {summary.remarks.map((r, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-violet-900">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" /> {r}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
+        {[
+          { title: "Bài em luyện tập nhiều nhất", list: summary.mostPracticed, show: (g) => `${g.attempts} lần` },
+          { title: "Bài cần luyện thêm (đúng ít nhất)", list: summary.weakest, show: (g) => `đúng ${g.accuracy}% · sai ${g.wrong} câu` },
+        ].map((box) => (
+          <div key={box.title} className="rounded-2xl bg-white p-5 shadow-elevation-1">
+            <p className="font-display font-bold text-slate-800">{box.title}</p>
+            {box.list.length === 0 ? (
+              <p className="mt-2 text-caption text-slate-400">Chưa đủ dữ liệu — làm thêm vài bài nhé.</p>
+            ) : (
+              <ul className="mt-2 space-y-1.5">
+                {box.list.map((g) => (
+                  <li key={g.lesson} className="flex items-center justify-between gap-3 text-sm">
+                    <Link to={`/bai/${g.lesson}`} className="min-w-0 truncate font-semibold text-slate-700 hover:text-primary">
+                      {g.title}
+                    </Link>
+                    <span className="shrink-0 text-xs font-bold text-slate-500">{box.show(g)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function HistoryPage() {
+  const [summary, setSummary] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [testAttempts, setTestAttempts] = useState([]);
   const [totals, setTotals] = useState({ practice: 0, tests: 0 });
@@ -61,6 +157,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    attemptService.practiceSummary().then((r) => setSummary(r.data)).catch(() => {});
     Promise.all([attemptService.myHistory(), badgeService.myBadges(), testAttemptService.myHistory()]).then(
       ([historyRes, badgesRes, testHistoryRes]) => {
         setAttempts(historyRes.data);
@@ -124,6 +221,8 @@ export default function HistoryPage() {
             </div>
           )}
         </section>
+
+        <PracticeSummary summary={summary} />
 
         <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-2">
           <section>

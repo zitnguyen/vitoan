@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
 import PageHeader, { HeaderStat } from "../../components/ui/PageHeader.jsx";
+import { getLastSubject, setLastSubject } from "../../lib/lastSubject.js";
 
 const SUBJECT_ICON = { toan: Divide, "tieng-viet": BookOpenText };
 const LEVEL_LABEL = { easy: "Dễ", medium: "Trung bình", hard: "Khó" };
@@ -120,6 +121,7 @@ export default function TestListPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const chapterParam = searchParams.get("chapter");
+  const subjectParam = searchParams.get("mon");
   const [subjects, setSubjects] = useState([]);
   const [activeSubjectId, setActiveSubjectId] = useState(null);
   const [topicTests, setTopicTests] = useState([]);
@@ -130,7 +132,9 @@ export default function TestListPage() {
     if (!user?.grade) return;
     subjectService.list().then(async (res) => {
       setSubjects(res.data);
-      let initialSubjectId = res.data[0]?._id || null;
+      // Môn mở sẵn: theo chủ đề → theo ?mon= từ trang trước → môn em xem gần nhất → môn đầu tiên.
+      const bySlug = (slug) => res.data.find((s) => s.slug === slug)?._id;
+      let initialSubjectId = bySlug(subjectParam) || bySlug(getLastSubject()) || res.data[0]?._id || null;
       if (chapterParam) {
         try {
           const chapterRes = await chapterService.list({});
@@ -142,7 +146,7 @@ export default function TestListPage() {
       }
       setActiveSubjectId(initialSubjectId);
     });
-  }, [user?.grade, chapterParam]);
+  }, [user?.grade, chapterParam, subjectParam]);
 
   useEffect(() => {
     if (!user?.grade || !activeSubjectId) return;
@@ -178,7 +182,10 @@ export default function TestListPage() {
             <button
               key={subject._id}
               type="button"
-              onClick={() => setActiveSubjectId(subject._id)}
+              onClick={() => {
+                setActiveSubjectId(subject._id);
+                setLastSubject(subject.slug);
+              }}
               className={cn("pill", active && "pill-active")}
             >
               <Icon className="h-4 w-4" /> {subject.name}

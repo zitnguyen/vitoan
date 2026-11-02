@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
-import { LogOut, ExternalLink, Menu, X, User, Home } from "lucide-react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { LogOut, ExternalLink, Menu, X, User, Home, ArrowLeft } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { cn } from "../../lib/utils";
 import OwlMascot from "../illustrations/OwlMascot.jsx";
@@ -84,8 +84,12 @@ function Sidebar({ onNavigate }) {
 }
 
 export default function AdminShell({ children }) {
-  const { pathname } = useLocation();
+  const { pathname, key } = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const isAdminRoot = pathname === "/admin" || pathname === "/admin/";
+  // key === "default" nghĩa là trang mở thẳng (không có lịch sử trước đó) → quay về trang tổng quan.
+  const goBack = () => (key === "default" ? navigate("/admin") : navigate(-1));
   const current = adminNavFor(pathname);
   const today = new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "numeric", year: "numeric" });
 
@@ -127,6 +131,15 @@ export default function AdminShell({ children }) {
           >
             <Menu className="h-5 w-5" />
           </button>
+          {!isAdminRoot && (
+            <button
+              type="button"
+              onClick={goBack}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition hover:border-primary/40 hover:text-primary active:scale-95"
+            >
+              <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Quay lại</span>
+            </button>
+          )}
           <div className="hidden w-52 shrink-0 md:block">
             <p className="truncate font-display font-extrabold text-slate-800">{current?.label || "Quản trị"}</p>
             <p className="truncate text-xs font-semibold first-letter:uppercase text-slate-400">{today}</p>

@@ -121,7 +121,7 @@ async function submit(req, res, next) {
     const gradedAnswers = validAnswers.map((a) => {
       const question = questionMap.get(String(a.question));
       const correct = gradeAnswer(question, a);
-      return { question: a.question, selectedIndex: a.selectedIndex ?? -1, textAnswer: a.textAnswer || "", correct };
+      return { question: a.question, selectedIndex: a.selectedIndex ?? -1, selectedIndexes: a.selectedIndexes || [], textAnswer: a.textAnswer || "", correct };
     });
     const score = gradedAnswers.filter((a) => a.correct).length;
 
@@ -182,6 +182,7 @@ async function saveProgress(req, res, next) {
     const graded = list.map((a) => ({
       question: a.question,
       selectedIndex: a.selectedIndex ?? -1,
+      selectedIndexes: a.selectedIndexes || [],
       textAnswer: a.textAnswer || "",
       correct: gradeAnswer(questionMap.get(String(a.question)), a),
     }));
@@ -317,11 +318,13 @@ async function submitGuest(req, res, next) {
               text: question.text,
               choices: question.choices,
               correctIndex: question.correctIndex,
+              correctIndexes: question.correctIndexes,
               correctText: question.correctText,
               explanation: question.explanation,
             }
           : null,
         selectedIndex: a.selectedIndex ?? -1,
+        selectedIndexes: a.selectedIndexes || [],
         textAnswer: a.textAnswer || "",
         correct,
       };
@@ -347,7 +350,7 @@ async function submitGuest(req, res, next) {
 async function getOne(req, res, next) {
   try {
     const attempt = await Attempt.findById(req.params.id)
-      .populate({ path: "answers.question", select: "type text imageUrl choices correctIndex correctText explanation" })
+      .populate({ path: "answers.question", select: "type text imageUrl choices correctIndex correctIndexes correctText explanation lesson", populate: { path: "lesson", select: "title order chapter", populate: { path: "chapter", select: "title order" } } })
       .populate({
         path: "lesson",
         select: "title subject grade chapter",
@@ -430,6 +433,90 @@ async function myHistory(req, res, next) {
   }
 }
 
+// GET /attempts/practice-summary — thống kê toàn bộ lượt luyện tập: số lần làm, số câu đúng/sai,
+// bài hay làm/yếu nhất, xu hướng gần đây, kèm nhận xét tự động.
+async function practiceSummary(req, res, next) {
+  try {
+    const attempts = await Attempt.find({ student: req.user._id })
+      .select("lesson score totalQuestions durationSeconds createdAt")
+      .populate({ path: "lesson", select: "title chapter order subject", populate: { path: "subject", select: "name slug" } })
+      .sort({ createdAt: 1 })
+      .lean();
+    const totalAttempts = attempts.length;
+    const correct = attempts.reduce((s, a) => s + a.score, 0);
+    const questions = attempts.reduce((s, a) => s + a.totalQuestions, 0);
+    const wrong = questions - correct;
+    const accuracy = questions ? Math.round((correct / questions) * 100) : 0;
+    const seconds = attempts.reduce((s, a) => s + (a.durationSeconds || 0), 0);
+
+    const byLessonMap = new Map();
+    for (const a of attempts) {
+      if (!a.lesson) continue;
+      const key = String(a.lesson._id);
+      const g = byLessonMap.get(key) || { lesson: key, title: a.lesson.title, subject: a.lesson.subject?.name || "", attempts: 0, correct: 0, total: 0 };
+      g.attempts += 1;
+      g.correct += a.score;
+      g.total += a.totalQuestions;
+      byLessonMap.set(key, g);
+    }
+    const byLesson = [...byLessonMap.values()].map((g) => ({ ...g, wrong: g.total - g.correct, accuracy: g.total ? Math.round((g.correct / g.total) * 100) : 0 }));
+    const mostPracticed = [...byLesson].sort((x, y) => y.attempts - x.attempts).slice(0, 5);
+    const weakest = byLesson.filter((g) => g.total >= 5).sort((x, y) => x.accuracy - y.accuracy).slice(0, 5);
+
+    // 14 ngày gần nhất: số lượt + tỉ lệ đúng mỗi ngày
+    const days = [];
+    let today = vnDayKey(new Date());
+    for (let i = 0; i < 14; i += 1) {
+      days.unshift(today);
+      today = prevDayKey(today);
+    }
+    const dayMap = new Map(days.map((d) => [d, { day: d, attempts: 0, correct: 0, total: 0 }]));
+    for (const a of attempts) {
+      const d = dayMap.get(vnDayKey(a.createdAt));
+      if (d) {
+        d.attempts += 1;
+        d.correct += a.score;
+        d.total += a.totalQuestions;
+      }
+    }
+    const recentDays = [...dayMap.values()];
+    const activeDays = recentDays.filter((d) => d.attempts > 0).length;
+
+    // Xu hướng: 5 lượt gần nhất so với 5 lượt trước đó
+    const pct = (list) => {
+      const t = list.reduce((s, a) => s + a.totalQuestions, 0);
+      return t ? Math.round((list.reduce((s, a) => s + a.score, 0) / t) * 100) : null;
+    };
+    const last5 = attempts.slice(-5);
+    const prev5 = attempts.slice(-10, -5);
+    const trendDiff = last5.length >= 3 && prev5.length >= 3 ? pct(last5) - pct(prev5) : null;
+
+    const remarks = [];
+    if (totalAttempts === 0) {
+      remarks.push("Em chưa làm bài luyện tập nào — hãy bắt đầu từ một bài học để ViToan nhận xét nhé!");
+    } else {
+      if (accuracy >= 85) remarks.push(`Em trả lời đúng ${accuracy}% số câu — kết quả rất tốt, hãy thử thêm bài khó hơn.`);
+      else if (accuracy >= 60) remarks.push(`Em trả lời đúng ${accuracy}% số câu — khá ổn, ôn lại các câu sai sẽ giúp em lên cao hơn.`);
+      else remarks.push(`Em mới đúng ${accuracy}% số câu — hãy xem lại lý thuyết và video trước khi luyện tập tiếp.`);
+      if (trendDiff !== null) {
+        if (trendDiff >= 5) remarks.push(`Gần đây em tiến bộ rõ rệt (+${trendDiff}% so với trước đó). Cố lên nhé!`);
+        else if (trendDiff <= -5) remarks.push(`Gần đây kết quả giảm ${-trendDiff}% so với trước — hãy làm chậm và đọc kỹ đề hơn.`);
+        else remarks.push("Kết quả gần đây khá ổn định.");
+      }
+      if (weakest[0] && weakest[0].accuracy < 70) remarks.push(`Bài em cần luyện thêm nhất: "${weakest[0].title}" (đúng ${weakest[0].accuracy}%).`);
+      if (activeDays >= 5) remarks.push(`Em luyện tập ${activeDays}/14 ngày gần đây — thói quen rất tốt!`);
+      else if (activeDays <= 2) remarks.push("Em nên luyện tập đều đặn mỗi ngày một ít để nhớ lâu hơn.");
+    }
+
+    res.json({
+      success: true,
+      data: { totalAttempts, correct, wrong, questions, accuracy, seconds, mostPracticed, weakest, recentDays, activeDays, trendDiff, remarks },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function stats(req, res, next) {
   try {
     const studentId = req.user._id;
@@ -486,10 +573,12 @@ async function stats(req, res, next) {
 }
 
 module.exports = {
+  checkAndAwardBadges,
   submit,
   submitGuest,
   getOne,
   myHistory,
+  practiceSummary,
   completedLessons,
   lessonStatus,
   stats,

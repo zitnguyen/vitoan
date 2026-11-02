@@ -252,6 +252,7 @@ async function checkAnswer(req, res, next) {
       data: {
         correct,
         correctIndex: question.correctIndex,
+        correctIndexes: question.correctIndexes,
         correctText: question.correctText,
         explanation: question.explanation,
       },
