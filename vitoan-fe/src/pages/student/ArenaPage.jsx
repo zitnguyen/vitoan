@@ -456,7 +456,7 @@ export default function ArenaPage() {
               <div className="mt-4 flex items-center gap-3 rounded-2xl bg-violet-50 px-4 py-2.5 ring-1 ring-violet-100">
                 <span className="text-xl">⚔️</span>
                 <p className="min-w-0 flex-1 truncate text-sm font-bold text-violet-800">
-                  {live.opponentName || oppProg?.opponentName || "Đối thủ"}: {oppProg?.opp ? `${oppProg.opp.answered}/${run.total} câu · ${oppProg.opp.score} đúng` : "đang chơi…"}
+                  {live.opponentName || oppProg?.opponentName || "Đối thủ"}: {oppProg?.opp ? `đã làm ${oppProg.opp.answered}/${run.total} câu` : "đang chơi…"}
                   {oppProg?.opp?.done && " ✅ đã xong"}
                 </p>
                 <div className="h-2.5 w-32 overflow-clip rounded-full bg-violet-200">

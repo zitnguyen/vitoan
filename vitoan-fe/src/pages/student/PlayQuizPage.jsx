@@ -358,6 +358,8 @@ export default function PlayQuizPage() {
       setShowFeedback(true);
       persist(answers, nextChecked, current);
       (res.data.correct ? playCorrectSound : playWrongSound)();
+    } catch (err) {
+      setHintError(err.apiMessage || "Chưa kiểm tra được, em thử lại nhé.");
     } finally {
       setChecking(false);
     }

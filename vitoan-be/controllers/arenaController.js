@@ -607,7 +607,8 @@ async function liveStatus(req, res, next) {
       state: ch.status === "waiting" ? "waiting" : ch.status === "done" ? "done" : "playing",
       opponentName: opp?.fullName || null,
       me: progressOf(myRun),
-      opp: oppRun ? progressOf(oppRun) : null,
+      // Đang chơi chỉ cho biết bạn kia đã làm bao nhiêu câu — không lộ số câu đúng (chỉ hiện khi trận đã xong).
+      opp: oppRun ? (({ answered, done, score }) => ({ answered, done, ...(ch.status === "done" ? { score } : {}) }))(progressOf(oppRun)) : null,
       total: ch.questions.length,
     };
     if (ch.status === "done") {
