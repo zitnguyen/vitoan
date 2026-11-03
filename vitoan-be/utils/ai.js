@@ -1,14 +1,14 @@
 // Gọi Google Gemini dùng chung cho gợi ý câu hỏi, trợ lý AI và nhận xét kết quả kiểm tra —
 // tránh lặp lại logic fetch/xử lý lỗi ở nhiều nơi. Giữ nguyên dạng messages kiểu
 // [{ role: "system" | "user" | "assistant", content }] để các nơi gọi không phải đổi.
-// Cấu hình: GEMINI_API_KEY (bắt buộc), GEMINI_MODEL (mặc định gemini-3.5-flash).
+// Cấu hình: GEMINI_API_KEY (bắt buộc), GEMINI_MODEL (mặc định gemini-3.1-flash-lite, nhanh nhất).
 // GEMINI_FALLBACK_MODELS (cách nhau dấu phẩy) là các model dự phòng khi model chính hết lượt.
 const MODELS = [
-  process.env.GEMINI_MODEL || "gemini-3.5-flash",
-  ...(process.env.GEMINI_FALLBACK_MODELS || "gemini-3.1-flash-lite,gemini-flash-latest,gemini-3.7-flash").split(",").map((s) => s.trim()).filter(Boolean),
+  process.env.GEMINI_MODEL || "gemini-3.1-flash-lite",
+  ...(process.env.GEMINI_FALLBACK_MODELS || "gemini-3.5-flash,gemini-flash-latest").split(",").map((s) => s.trim()).filter(Boolean),
 ];
 const cooldownUntil = new Map();
-const REQUEST_TIMEOUT_MS = 12_000;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 // Bộ lọc nội dung của Gemini đặt mức chặn thấp nhất vì người dùng là trẻ tiểu học.
 const SAFETY_SETTINGS = [
