@@ -30,7 +30,7 @@ async function lessonProgressMap(studentId, lessonIds) {
       },
     },
   ]);
-  return new Map(
+  const map = new Map(
     rows.map((r) => {
       const bestPercent = Math.round(r.bestPercent);
       return [
@@ -43,6 +43,21 @@ async function lessonProgressMap(studentId, lessonIds) {
       ];
     }),
   );
+  // Bài do admin tick "đã học" cũng được tính là đã học xong.
+  const LessonProgress = require("../models/LessonProgress");
+  const forced = await LessonProgress.find({ ...match, adminCompleted: true })
+    .select("lesson")
+    .lean();
+  for (const f of forced) {
+    const key = String(f.lesson);
+    const cur = map.get(key);
+    map.set(key, {
+      bestPercent: cur?.bestPercent ?? 100,
+      attempts: cur?.attempts || 0,
+      passed: true,
+    });
+  }
+  return map;
 }
 
 async function passedLessonIds(studentId) {
@@ -81,7 +96,7 @@ function summarizeLearning({
         : duration
           ? (lp?.videoSeconds || 0) / duration
           : 0;
-    const done = !!lp?.videoDone;
+    const done = !!lp?.videoDone || !!lp?.adminCompleted;
     steps.video = {
       done,
       percent: done ? 100 : Math.min(99, Math.round(ratio * 100)),
@@ -93,7 +108,7 @@ function summarizeLearning({
     };
   }
   if (hasTheory) {
-    const done = !!lp?.theoryDone;
+    const done = !!lp?.theoryDone || !!lp?.adminCompleted;
     steps.theory = { done, percent: done ? 100 : 0 };
   }
   if (questionCount > 0) {

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Mic, Plus, Trash2, Bot } from "../../components/ui/icons.jsx";
+import { Send, Mic, Plus, Trash2 } from "../../components/ui/icons.jsx";
 import { chatService } from "../../api/services";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
-import PageHeader from "../../components/ui/PageHeader.jsx";
+import ChatReply from "../../components/chat/ChatReply.jsx";
 
 function useSpeechRecognition(onResult) {
   const recognitionRef = useRef(null);
@@ -42,7 +42,8 @@ export default function AIChatPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [loadingList, setLoadingList] = useState(true);
-  const bottomRef = useRef(null);
+  const scrollRef = useRef(null);
+  const [showAll, setShowAll] = useState(false);
 
   const { supported: micSupported, listening, start, stop } = useSpeechRecognition((text) =>
     setInput((prev) => (prev ? `${prev} ${text}` : text))
@@ -59,9 +60,11 @@ export default function AIChatPage() {
     loadList();
   }, []);
 
+  // Chỉ cuộn khung tin nhắn (không dùng scrollIntoView vì nó kéo luôn cả trang web nhảy theo).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: showAll ? el.scrollHeight : 0, behavior: "smooth" });
+  }, [messages, sending, showAll]);
 
   function openConversation(id) {
     setActiveId(id);
@@ -74,6 +77,9 @@ export default function AIChatPage() {
     setMessages([]);
     setError("");
   }
+
+  // Mặc định chỉ hiện câu hỏi mới nhất và câu trả lời của nó, vừa khung — bé không phải cuộn.
+  const visibleMessages = showAll ? messages : messages.slice(-2);
 
   function handleSend(e) {
     e.preventDefault();
@@ -107,12 +113,9 @@ export default function AIChatPage() {
   }
 
   return (
-    <div>
-      <div className="page pb-0">
-        <PageHeader icon={Bot} tone="violet" title="Bạn đồng hành" subtitle="Hỏi cú ViToan bất cứ điều gì về bài học nhé!" />
-      </div>
-      <div className="page grid grid-cols-1 gap-5 lg:grid-cols-[280px_1fr]">
-        <div className="rounded-3xl bg-white p-4 shadow-elevation-1">
+    <div className="flex h-full flex-col">
+      <div className="page grid min-h-0 flex-1 grid-cols-1 gap-4 py-4 lg:grid-cols-[260px_1fr] max-lg:grid-rows-[auto_minmax(0,1fr)]">
+        <div className="flex min-h-0 flex-col rounded-3xl bg-white p-4 shadow-elevation-1 max-lg:max-h-60">
           <button
             type="button"
             onClick={newConversation}
@@ -120,7 +123,7 @@ export default function AIChatPage() {
           >
             <Plus className="h-4 w-4" /> Cuộc trò chuyện mới
           </button>
-          <div className="mt-3 space-y-1">
+          <div className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {loadingList ? (
               <div className="flex justify-center py-4">
                 <Spinner />
@@ -152,7 +155,7 @@ export default function AIChatPage() {
           </div>
         </div>
 
-        <div className="flex flex-col rounded-3xl bg-white shadow-elevation-1">
+        <div className="flex min-h-0 flex-col rounded-3xl bg-white shadow-elevation-1">
           <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-4">
             <OwlMascot className="h-9 w-9" animated={false} />
             <div>
@@ -161,7 +164,7 @@ export default function AIChatPage() {
             </div>
           </div>
 
-          <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4" style={{ height: "calc(100vh - 400px)", minHeight: 360 }}>
+          <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {messages.length === 0 && (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                 <OwlMascot className="h-28 w-28" />
@@ -186,15 +189,25 @@ export default function AIChatPage() {
                 </div>
               </div>
             )}
-            {messages.map((m, idx) => (
+            {messages.length > 2 && (
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="mx-auto block rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500 hover:text-primary"
+              >
+                {showAll ? "Chỉ xem câu mới nhất" : `Xem lại ${messages.length - 2} tin trước`}
+              </button>
+            )}
+            {visibleMessages.map((m, idx) => (
               <div key={m._id || idx} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
-                    "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
+                    "rounded-2xl px-4 py-2.5 text-sm",
+                    m.role === "user" ? "max-w-[80%]" : "max-w-[92%] md:max-w-[85%]",
                     m.role === "user" ? "bg-primary text-white" : "bg-slate-100 text-slate-700"
                   )}
                 >
-                  {m.content}
+                  {m.role === "user" ? m.content : <ChatReply text={m.content} />}
                 </div>
               </div>
             ))}
@@ -203,7 +216,6 @@ export default function AIChatPage() {
                 <div className="rounded-2xl bg-slate-100 px-4 py-2.5 text-sm text-slate-400">Đang trả lời...</div>
               </div>
             )}
-            <div ref={bottomRef} />
           </div>
 
           {error && <p className="px-5 text-caption text-red-600">{error}</p>}

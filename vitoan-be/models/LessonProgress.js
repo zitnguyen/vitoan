@@ -14,6 +14,8 @@ const lessonProgressSchema = new mongoose.Schema(
     videoSeconds: { type: Number, default: 0 }, // (cũ) mốc xa nhất — chỉ dùng cho dữ liệu trước đây
     videoDone: { type: Boolean, default: false },
     theoryDone: { type: Boolean, default: false },
+    // Admin tick "đã học" thay học sinh để mở khoá làm kiểm tra (không cần có lượt luyện tập).
+    adminCompleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

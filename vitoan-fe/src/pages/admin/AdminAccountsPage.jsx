@@ -4,6 +4,7 @@ import { userService, gradeService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
 import PasswordInput from "../../components/ui/PasswordInput.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
+import StudentLessonTicks from "../../components/admin/StudentLessonTicks.jsx";
 import { AdminPage, Card, Field, IconButton, inputClass } from "../../components/admin/adminUi.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { cn } from "../../lib/utils";
@@ -64,6 +65,11 @@ export default function AdminAccountsPage() {
       password: "",
       role: account.role,
       grade: account.grade?._id || account.grade || "",
+      points: account.points ?? 0,
+      dateOfBirth: account.dateOfBirth ? account.dateOfBirth.slice(0, 10) : "",
+      dailyGoal: account.dailyGoal ?? 3,
+      vipUntil: account.vipUntil ? account.vipUntil.slice(0, 10) : "",
+      isTest: !!account.isTest,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -178,6 +184,37 @@ export default function AdminAccountsPage() {
             ) : (
               <div />
             )}
+            {editingId && form.role === "Student" && (
+              <Field label="Điểm" hint="Số điểm (gem) hiện có của học sinh, dùng để đổi quà.">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  className={inputClass}
+                  value={form.points}
+                  onChange={(e) => setForm((f) => ({ ...f, points: e.target.value }))}
+                />
+              </Field>
+            )}
+            {editingId && form.role === "Student" && (
+              <>
+                <Field label="Ngày sinh">
+                  <input type="date" className={inputClass} value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} />
+                </Field>
+                <Field label="Mục tiêu mỗi ngày (bài)" hint="Từ 1 đến 10 bài.">
+                  <input type="number" min="1" max="10" step="1" className={inputClass} value={form.dailyGoal} onChange={(e) => setForm((f) => ({ ...f, dailyGoal: e.target.value }))} />
+                </Field>
+                <Field label="VIP đến ngày" hint="Để trống nếu không có VIP.">
+                  <input type="date" className={inputClass} value={form.vipUntil} onChange={(e) => setForm((f) => ({ ...f, vipUntil: e.target.value }))} />
+                </Field>
+                <Field label="Tài khoản thử nghiệm" hint="Không tính vào thống kê và báo cáo.">
+                  <label className="flex items-center gap-2 py-2.5 font-semibold text-slate-700">
+                    <input type="checkbox" className="h-5 w-5" checked={form.isTest} onChange={(e) => setForm((f) => ({ ...f, isTest: e.target.checked }))} />
+                    Đánh dấu là tài khoản demo
+                  </label>
+                </Field>
+              </>
+            )}
             <Field label="Họ và tên" required>
               <input className={inputClass} value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} required />
             </Field>
@@ -209,6 +246,7 @@ export default function AdminAccountsPage() {
               <input className={inputClass} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
             </Field>
           </div>
+          {editingId && form.role === "Student" && <StudentLessonTicks studentId={editingId} />}
           {error && <p className="mt-4 rounded-xl bg-red-50 px-4 py-2.5 font-semibold text-red-600">{error}</p>}
           <div className="mt-4 flex gap-2 border-t border-slate-100 pt-4">
             <Button type="submit">{editingId ? "Lưu thay đổi" : "Tạo tài khoản"}</Button>

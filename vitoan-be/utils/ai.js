@@ -1,8 +1,8 @@
 // Gọi Google Gemini dùng chung cho gợi ý câu hỏi, trợ lý AI và nhận xét kết quả kiểm tra —
 // tránh lặp lại logic fetch/xử lý lỗi ở nhiều nơi. Giữ nguyên dạng messages kiểu
 // [{ role: "system" | "user" | "assistant", content }] để các nơi gọi không phải đổi.
-// Cấu hình: GEMINI_API_KEY (bắt buộc), GEMINI_MODEL (mặc định gemini-2.5-flash).
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+// Cấu hình: GEMINI_API_KEY (bắt buộc), GEMINI_MODEL (mặc định gemini-3.5-flash).
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 // Bộ lọc nội dung của Gemini đặt mức chặn thấp nhất vì người dùng là trẻ tiểu học.
 const SAFETY_SETTINGS = [

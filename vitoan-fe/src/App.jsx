@@ -73,12 +73,14 @@ export default function App() {
     /^\/bai\/[^/]+\/luyen-tap/.test(location.pathname) ||
     /^\/kiem-tra\/(?!ket-qua)[^/]+$/.test(location.pathname);
   const hideChrome = isAdminRoute || isFocusRoute;
+  // Trang Bạn đồng hành vừa khít màn hình: không footer, không cuộn trang.
+  const isChatRoute = location.pathname === "/ban-dong-hanh";
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className={isChatRoute ? "flex h-dvh flex-col overflow-hidden" : "flex min-h-screen flex-col"}>
       <ScrollToTop />
       {!hideChrome && <SiteHeader />}
-      <main className="min-h-[75vh] flex-1">
+      <main className={isChatRoute ? "min-h-0 flex-1" : "min-h-[75vh] flex-1"}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/lop/:gradeSlug" element={<GradeDefaultRedirect />} />
@@ -389,7 +391,7 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
-      {!hideChrome && <SiteFooter />}
+      {!hideChrome && !isChatRoute && <SiteFooter />}
     </div>
   );
 }

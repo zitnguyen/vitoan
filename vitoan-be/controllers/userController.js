@@ -4,6 +4,8 @@ const Attempt = require("../models/Attempt");
 const Question = require("../models/Question");
 const Lesson = require("../models/Lesson");
 const Grade = require("../models/Grade");
+const LessonProgress = require("../models/LessonProgress");
+const { lessonProgressMap } = require("../utils/progress");
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,6 +23,10 @@ function toAccountView(user) {
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
     points: user.points || 0,
+    dateOfBirth: user.dateOfBirth,
+    dailyGoal: user.dailyGoal,
+    vipUntil: user.vipUntil,
+    isTest: !!user.isTest,
   };
 }
 
@@ -174,6 +180,35 @@ async function update(req, res, next) {
       user.password = newPassword;
     }
     user.grade = user.role === "Student" ? req.body.grade || undefined : undefined;
+    // Admin chỉnh điểm (gem) của học sinh; bỏ qua nếu không gửi lên.
+    if (user.role === "Student" && req.body.points !== undefined && req.body.points !== "") {
+      const points = Number(req.body.points);
+      if (!Number.isInteger(points) || points < 0) {
+        return res.status(400).json({ success: false, message: "Điểm phải là số nguyên không âm" });
+      }
+      user.points = points;
+    }
+    if (user.role === "Student") {
+      const { dateOfBirth, dailyGoal, vipUntil, isTest } = req.body;
+      if (dateOfBirth !== undefined) {
+        const d = dateOfBirth ? new Date(dateOfBirth) : undefined;
+        if (d && Number.isNaN(d.getTime())) return res.status(400).json({ success: false, message: "Ngày sinh không hợp lệ" });
+        user.dateOfBirth = d;
+      }
+      if (vipUntil !== undefined) {
+        const d = vipUntil ? new Date(vipUntil) : undefined;
+        if (d && Number.isNaN(d.getTime())) return res.status(400).json({ success: false, message: "Ngày hết hạn VIP không hợp lệ" });
+        user.vipUntil = d;
+      }
+      if (dailyGoal !== undefined && dailyGoal !== "") {
+        const g = Number(dailyGoal);
+        if (!Number.isInteger(g) || g < 1 || g > 10) {
+          return res.status(400).json({ success: false, message: "Mục tiêu mỗi ngày phải từ 1 đến 10 bài" });
+        }
+        user.dailyGoal = g;
+      }
+      if (typeof isTest === "boolean") user.isTest = isTest;
+    }
     await user.save();
     await user.populate("grade", "name");
     res.json({ success: true, data: toAccountView(user) });
@@ -197,6 +232,71 @@ async function updateStatus(req, res, next) {
     );
     if (!user) return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản" });
     res.json({ success: true, data: toAccountView(user) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Admin xem danh sách bài học của lớp học sinh kèm trạng thái "đã học" (làm bài thật hoặc admin tick).
+async function listLessonProgress(req, res, next) {
+  try {
+    const student = await User.findById(req.params.id).select("role grade");
+    if (!student || student.role !== "Student") return res.status(404).json({ success: false, message: "Không tìm thấy học sinh" });
+    if (!student.grade) return res.json({ success: true, data: [] });
+    const lessons = await Lesson.find({ grade: student.grade, isPublished: true })
+      .populate("chapter", "title order semester")
+      .populate("subject", "name")
+      .sort({ order: 1 })
+      .lean();
+    const lessonIds = lessons.map((l) => l._id);
+    const [map, forced] = await Promise.all([
+      lessonProgressMap(student._id, lessonIds),
+      LessonProgress.find({ student: student._id, lesson: { $in: lessonIds }, adminCompleted: true }).select("lesson").lean(),
+    ]);
+    const forcedSet = new Set(forced.map((f) => String(f.lesson)));
+    const data = lessons.map((l) => ({
+      _id: l._id,
+      title: l.title,
+      order: l.order,
+      subject: l.subject?.name || "",
+      chapterId: l.chapter?._id || null,
+      chapterTitle: l.chapter?.title || "Chưa phân chương",
+      chapterOrder: l.chapter?.order ?? 0,
+      semester: l.chapter?.semester || 1,
+      completed: !!map.get(String(l._id))?.passed,
+      attempts: map.get(String(l._id))?.attempts || 0,
+      adminCompleted: forcedSet.has(String(l._id)),
+    }));
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Admin tick / bỏ tick "đã học" cho nhiều bài: body { lessonIds: [...], completed: true|false }.
+async function setLessonProgress(req, res, next) {
+  try {
+    const student = await User.findById(req.params.id).select("role grade");
+    if (!student || student.role !== "Student") return res.status(404).json({ success: false, message: "Không tìm thấy học sinh" });
+    const lessonIds = Array.isArray(req.body.lessonIds) ? req.body.lessonIds : [];
+    if (!lessonIds.length || typeof req.body.completed !== "boolean") {
+      return res.status(400).json({ success: false, message: "Thiếu danh sách bài học hoặc trạng thái" });
+    }
+    const valid = await Lesson.find({ _id: { $in: lessonIds }, grade: student.grade }).distinct("_id");
+    if (req.body.completed) {
+      await LessonProgress.bulkWrite(
+        valid.map((lesson) => ({
+          updateOne: {
+            filter: { student: student._id, lesson },
+            update: { $set: { adminCompleted: true } },
+            upsert: true,
+          },
+        }))
+      );
+    } else {
+      await LessonProgress.updateMany({ student: student._id, lesson: { $in: valid } }, { $set: { adminCompleted: false } });
+    }
+    res.json({ success: true, data: { updated: valid.length } });
   } catch (err) {
     next(err);
   }
@@ -315,4 +415,4 @@ async function publicStats(req, res, next) {
   }
 }
 
-module.exports = { listStudents, list, getOne, create, update, updateStatus, leaderboard, publicLeaderboard, publicStats };
+module.exports = { listLessonProgress, setLessonProgress, listStudents, list, getOne, create, update, updateStatus, leaderboard, publicLeaderboard, publicStats };
