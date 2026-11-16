@@ -30,12 +30,41 @@ export default function WeakKnowledgeSection() {
       .catch(() => {});
   }, []);
 
+  // Nhận xét do AI viết từ thống kê: { status: "loading" | "ok" | "error", lines: [] }.
+  const [ai, setAi] = useState({ status: "loading", lines: [] });
+
   useEffect(() => {
+    let cancelled = false;
     setWeak(null);
+    setAi({ status: "loading", lines: [] });
     attemptService
       .weakKnowledge({ subject: subjectFilter || undefined })
-      .then((res) => setWeak(res.data))
-      .catch(() => setWeak({ remarks: [], lessons: [], chapters: [], frequentWrongQuestions: [], totalAnswered: 0 }));
+      .then((res) => {
+        if (cancelled) return;
+        setWeak(res.data);
+        // Chưa làm câu nào thì không cần AI.
+        if (!res.data.totalAnswered) return setAi({ status: "error", lines: [] });
+        attemptService
+          .weakReview({ subject: subjectFilter || undefined })
+          .then((r) => {
+            if (cancelled) return;
+            const lines = String(r.data?.review || "")
+              .split("\n")
+              .map((l) => l.replace(/^\s*[-•*]\s*/, "").trim())
+              .filter(Boolean);
+            setAi(lines.length ? { status: "ok", lines } : { status: "error", lines: [] });
+          })
+          // AI hết lượt/lỗi mạng → dùng nhận xét tự động có sẵn.
+          .catch(() => !cancelled && setAi({ status: "error", lines: [] }));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWeak({ remarks: [], lessons: [], chapters: [], frequentWrongQuestions: [], totalAnswered: 0 });
+        setAi({ status: "error", lines: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [subjectFilter]);
 
   const weakLessons = weak?.lessons?.filter((g) => g.wrong > 0) || [];
@@ -70,6 +99,7 @@ export default function WeakKnowledgeSection() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="flex items-center gap-2 font-display font-bold text-slate-800">
                 <MessageSquareQuote className="h-5 w-5 text-secondary" /> Nhận xét của ViToan
+                {ai.status === "ok" && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-700">AI đã đọc thống kê của em</span>}
               </p>
               {weak.totalAnswered > 0 && (
                 <p className="text-sm text-slate-500">
@@ -78,8 +108,13 @@ export default function WeakKnowledgeSection() {
                 </p>
               )}
             </div>
+            {ai.status === "loading" && weak.totalAnswered > 0 && (
+              <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-violet-600">
+                <Spinner className="h-4 w-4 border-2" /> AI đang đọc thống kê bài làm của em…
+              </p>
+            )}
             <ul className="mt-2 space-y-1.5">
-              {weak.remarks.map((r, i) => (
+              {(ai.status === "ok" ? ai.lines : ai.status === "loading" && weak.totalAnswered > 0 ? [] : weak.remarks).map((r, i) => (
                 <li key={i} className="flex items-start gap-2 text-body text-slate-700">
                   <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-secondary" /> {r}
                 </li>

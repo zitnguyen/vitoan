@@ -10,12 +10,14 @@ const Attempt = require("../models/Attempt");
 const TestAttempt = require("../models/TestAttempt");
 const { gradeAnswer } = require("../utils/grading");
 const { chatCompletion, parseJsonLoose } = require("../utils/ai");
+const { isObjectId, same, diffFields } = require("../utils/excelSync");
+const { isStaff } = require("../utils/rbac");
 
 const DIFFICULTY_LABEL = { easy: "Dễ", medium: "Trung bình", hard: "Khó" };
 
 function stripAnswer(question) {
-  const { _id, lesson, type, text, audioText, imageUrl, choices, difficulty, order, source } = question;
-  return { _id, lesson, type, text, audioText, imageUrl, choices, difficulty, order, source };
+  const { _id, lesson, type, text, audioText, imageUrl, choices, choiceImages, difficulty, order, source } = question;
+  return { _id, lesson, type, text, audioText, imageUrl, choices, choiceImages, difficulty, order, source };
 }
 
 // Tỉ lệ làm sai của từng câu (gộp luyện tập + kiểm tra) → Map questionId -> { total, wrong }.
@@ -40,10 +42,11 @@ async function answerStats(ids) {
   return map;
 }
 
-async function list(req, res, next) {
-  try {
-    const filter = {};
-    if (req.query.search) filter.text = new RegExp(escapeRegExp(req.query.search.trim()), "i");
+// Bộ lọc câu hỏi dùng chung cho danh sách và xuất Excel.
+async function buildFilter(query) {
+  const req = { query };
+  const filter = {};
+  if (req.query.search) filter.text = new RegExp(escapeRegExp(req.query.search.trim()), "i");
     if (req.query.difficulty) filter.difficulty = req.query.difficulty;
     if (req.query.type) filter.type = req.query.type;
     if (req.query.source === "self") filter["source.kind"] = { $in: ["self", null] };
@@ -61,6 +64,12 @@ async function list(req, res, next) {
       const lessonIds = await Lesson.find(lessonFilter).distinct("_id");
       filter.lesson = { $in: lessonIds };
     }
+  return filter;
+}
+
+async function list(req, res, next) {
+  try {
+    const filter = await buildFilter(req.query);
 
     // Sắp xếp "hay sai nhất": chỉ xét câu đã có ít nhất 3 lượt làm, xếp theo tỉ lệ sai giảm dần.
     let orderedIds = null;
@@ -182,7 +191,7 @@ async function listByLesson(req, res, next) {
       return res.status(403).json({ success: false, message: "Bài học này không thuộc lớp em đã chọn" });
     }
     const questions = await Question.find({ lesson: req.params.lessonId }).sort({ order: 1, createdAt: 1 });
-    const isAdmin = req.user && req.user.role === "Admin";
+    const isAdmin = isStaff(req.user);
     res.json({ success: true, data: isAdmin ? questions : dedupeQuestions(questions).map(stripAnswer) });
   } catch (err) {
     next(err);
@@ -221,7 +230,8 @@ Chỉ trả về ĐÚNG JSON là một mảng, không thêm chữ nào khác, th
     const data = drafts.map((q) => ({
       type: "multiple_choice",
       text: q.text || "",
-      choices: Array.isArray(q.choices) ? q.choices : ["", "", "", ""],
+      // Luôn đủ 4 ô đáp án (thiếu thì để trống cho admin điền thêm).
+      choices: [...(Array.isArray(q.choices) ? q.choices : []).slice(0, 4), "", "", "", ""].slice(0, 4),
       correctIndex: Number.isInteger(q.correctIndex) ? q.correctIndex : 0,
       explanation: q.explanation || "",
       difficulty,
@@ -273,6 +283,13 @@ async function create(req, res, next) {
 
 async function update(req, res, next) {
   try {
+    // Update validator không biết `type` của câu → tự kiểm tra số đáp án ở đây.
+    if (req.body.choices !== undefined || req.body.type !== undefined) {
+      const existing = await Question.findById(req.params.id).select("type choices");
+      if (!existing) return res.status(404).json({ success: false, message: "Không tìm thấy câu hỏi" });
+      const problem = Question.choicesProblem(req.body.type || existing.type, req.body.choices ?? existing.choices);
+      if (problem) return res.status(400).json({ success: false, message: problem });
+    }
     const question = await Question.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after', runValidators: true });
     if (!question) return res.status(404).json({ success: false, message: "Không tìm thấy câu hỏi" });
     res.json({ success: true, data: question });
@@ -290,31 +307,93 @@ async function remove(req, res, next) {
   }
 }
 
+// Xuất toàn bộ câu hỏi theo bộ lọc hiện tại (cùng tham số với danh sách) để admin tải Excel về sửa.
+async function exportQuestions(req, res, next) {
+  try {
+    const filter = await buildFilter(req.query);
+    if (filter.lesson === undefined && !filter.testOnly) filter.lesson = { $ne: null };
+    const questions = await Question.find({ ...filter, testOnly: { $ne: true } })
+      .populate({
+        path: "lesson",
+        select: "title subject grade chapter order",
+        populate: [
+          { path: "subject", select: "name" },
+          { path: "grade", select: "name" },
+          { path: "chapter", select: "title order semester" },
+        ],
+      })
+      .sort({ lesson: 1, order: 1, createdAt: 1 })
+      .limit(20000)
+      .lean();
+    res.json({ success: true, data: questions.filter((q) => q.lesson) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+const SOURCE_FIELDS = ["kind", "book", "volume", "page", "exercise", "url", "note"];
+
 // Nhập nhiều câu một lần (từ tệp Excel ở trang quản trị). Mỗi câu kiểm tra riêng;
 // câu lỗi được báo lại theo số dòng, câu hợp lệ vẫn được lưu.
+// Dòng có `_id` (tệp xuất từ hệ thống) → chỉ cập nhật các trường đã đổi; không đổi gì thì bỏ qua.
 async function importMany(req, res, next) {
   try {
-    const items = Array.isArray(req.body.questions) ? req.body.questions.slice(0, 500) : [];
+    const items = Array.isArray(req.body.questions) ? req.body.questions.slice(0, 5000) : [];
     if (!items.length) return res.status(400).json({ success: false, message: "Không có câu hỏi nào để nhập" });
-    const lessonIds = [...new Set(items.map((q) => String(q.lesson || "")))].filter(Boolean);
-    const found = new Set((await Lesson.find({ _id: { $in: lessonIds.filter((id) => /^[a-f0-9]{24}$/i.test(id)) } }).select("_id")).map((l) => String(l._id)));
+    const lessonIds = [...new Set(items.map((q) => String(q.lesson || "")))].filter(isObjectId);
+    const found = new Set((await Lesson.find({ _id: { $in: lessonIds } }).select("_id")).map((l) => String(l._id)));
     const maxOrder = {};
-    for (const id of found) {
-      const last = await Question.findOne({ lesson: id }).sort({ order: -1 }).select("order");
-      maxOrder[id] = last?.order || 0;
-    }
+    const nextOrder = async (lessonId) => {
+      if (maxOrder[lessonId] === undefined) {
+        const last = await Question.findOne({ lesson: lessonId }).sort({ order: -1 }).select("order");
+        maxOrder[lessonId] = last?.order || 0;
+      }
+      return ++maxOrder[lessonId];
+    };
     const errors = [];
     const docs = [];
-    items.forEach((raw, i) => {
+    let updated = 0;
+    let unchanged = 0;
+    for (let i = 0; i < items.length; i++) {
+      const raw = items[i];
       const row = raw.row || i + 2;
-      if (!found.has(String(raw.lesson))) { errors.push({ row, message: "Không tìm thấy bài học" }); return; }
-      const doc = new Question({ ...raw, row: undefined, order: ++maxOrder[String(raw.lesson)] });
+      if (raw._id) {
+        const existing = isObjectId(String(raw._id)) ? await Question.findById(raw._id) : null;
+        if (!existing) { errors.push({ row, message: `Không tìm thấy câu hỏi có mã ${raw._id}` }); continue; }
+        if (raw.lesson && !found.has(String(raw.lesson))) { errors.push({ row, message: "Không tìm thấy bài học" }); continue; }
+        const isFill = raw.type === "fill_blank" || raw.type === "listen_fill";
+        const next = {
+          lesson: raw.lesson || undefined,
+          type: raw.type,
+          text: raw.text,
+          audioText: raw.audioText ?? "",
+          explanation: raw.explanation ?? "",
+          difficulty: raw.difficulty,
+          imageUrl: raw.imageUrl ? raw.imageUrl : undefined, // ô trống = giữ ảnh cũ
+          choices: isFill ? [] : raw.choices,
+          correctIndex: isFill ? 0 : raw.correctIndex,
+          correctText: isFill ? raw.correctText : "",
+        };
+        const changed = diffFields(existing, next);
+        const src = { ...(existing.source?.toObject?.() || {}), ...(raw.source || {}) };
+        const srcDiff = SOURCE_FIELDS.some((f) => !same(existing.source?.[f], src[f]));
+        if (srcDiff) changed.source = Object.fromEntries(SOURCE_FIELDS.map((f) => [f, src[f] ?? ""]));
+        if (!Object.keys(changed).length) { unchanged++; continue; }
+        const doc = new Question({ ...existing.toObject(), ...changed });
+        const err = doc.validateSync();
+        if (err) { errors.push({ row, message: Object.values(err.errors).map((e) => e.message).join("; ") }); continue; }
+        await Question.updateOne({ _id: existing._id }, { $set: changed });
+        updated++;
+        continue;
+      }
+      if (!found.has(String(raw.lesson))) { errors.push({ row, message: "Không tìm thấy bài học" }); continue; }
+      const doc = new Question({ ...raw, row: undefined, _id: undefined, order: await nextOrder(String(raw.lesson)) });
       const err = doc.validateSync();
-      if (err) { errors.push({ row, message: Object.values(err.errors).map((e) => e.message).join("; ") }); return; }
+      if (err) { errors.push({ row, message: Object.values(err.errors).map((e) => e.message).join("; ") }); continue; }
       docs.push(doc);
-    });
+    }
     if (docs.length) await Question.insertMany(docs);
-    res.status(201).json({ success: true, data: { inserted: docs.length, errors } });
+    res.status(201).json({ success: true, data: { inserted: docs.length, updated, unchanged, errors } });
   } catch (err) {
     next(err);
   }
@@ -322,4 +401,4 @@ async function importMany(req, res, next) {
 
 module.exports = {
   tree,
-  bulk, list, listByLesson, aiGenerate, checkAnswer, create, update, remove, importMany };
+  bulk, list, listByLesson, aiGenerate, checkAnswer, create, update, remove, importMany, exportQuestions };

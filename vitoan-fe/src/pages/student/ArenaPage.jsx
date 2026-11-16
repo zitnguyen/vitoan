@@ -494,6 +494,7 @@ export default function ArenaPage() {
                     )}
                   >
                     <span className="absolute left-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-500">{LETTERS[i]}</span>
+                    {q.choiceImages?.[i] && <img src={q.choiceImages[i]} alt="" className="mx-auto mb-1 max-h-28 w-auto max-w-full rounded-xl object-contain" />}
                     {c}
                     {showRight && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-2xl">✅</span>}
                     {showWrong && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-2xl">❌</span>}

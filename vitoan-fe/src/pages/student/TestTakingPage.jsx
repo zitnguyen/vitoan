@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -124,6 +124,20 @@ export default function TestTakingPage() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [started]);
+
+  // Nút Lùi/Tiến của trình duyệt (hoặc vuốt lùi trên điện thoại) khi đang làm bài → hỏi lại, tránh mất bài.
+  // Nộp bài xong (submittedRef) hoặc đã xác nhận thoát bằng nút "Thoát" (leavingRef) thì không chặn nữa.
+  const leavingRef = useRef(false);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) => started && !submittedRef.current && !leavingRef.current && currentLocation.pathname !== nextLocation.pathname
+  );
+  useEffect(() => {
+    if (blocker.state !== "blocked") return;
+    dialog
+      .confirm({ message: "Em đang làm bài kiểm tra. Rời khỏi trang này thì bài làm hiện tại sẽ không được lưu. Em vẫn muốn thoát?", danger: true, confirmText: "Thoát", cancelText: "Làm tiếp" })
+      .then((ok) => (ok ? blocker.proceed() : blocker.reset()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocker.state]);
 
   useEffect(() => () => stopSpeaking(), []);
   useEffect(() => setZoom(100), [current]);
@@ -322,14 +336,14 @@ export default function TestTakingPage() {
 
 
   return (
-    <div className="min-h-screen">
+    <div className="flex h-dvh flex-col overflow-hidden">
       {/* Tiêu đề bài + thanh tiến độ */}
-      <div className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/95 shadow-[0_6px_20px_-14px_rgba(11,35,64,0.35)] backdrop-blur">
+      <div className="relative z-30 shrink-0 border-b border-slate-200/70 bg-white/95 shadow-[0_6px_20px_-14px_rgba(11,35,64,0.35)] backdrop-blur">
         <div className="mx-auto flex max-w-6xl xl:max-w-none xl:px-10 2xl:px-16 items-center gap-3 px-4 py-2.5">
           <button
             type="button"
             title="Thoát bài kiểm tra"
-            onClick={async () => (await dialog.confirm({ message: "Thoát bài kiểm tra? Bài làm hiện tại sẽ không được lưu.", danger: true, confirmText: "Thoát", cancelText: "Làm tiếp" })) && navigate(backTo)}
+            onClick={async () => (await dialog.confirm({ message: "Thoát bài kiểm tra? Bài làm hiện tại sẽ không được lưu.", danger: true, confirmText: "Thoát", cancelText: "Làm tiếp" })) && ((leavingRef.current = true), navigate(backTo))}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -357,10 +371,10 @@ export default function TestTakingPage() {
         </div>
       </div>
 
-      <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-5 px-4 py-5 xl:max-w-none xl:px-10 lg:grid-cols-[1fr_270px] 2xl:px-16">
+      <div className="mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto px-4 py-3 xl:max-w-none xl:px-10 lg:grid-cols-[1fr_270px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-visible 2xl:px-16">
         {/* ===== Câu hỏi ===== */}
-        <div>
-          <div className="overflow-clip rounded-2xl bg-white shadow-elevation-1">
+        <div className="flex min-h-0 flex-col">
+          <div className="flex min-h-[26rem] flex-1 flex-col overflow-clip rounded-2xl bg-white shadow-elevation-1 lg:min-h-0">
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 bg-primary px-4 py-3 text-white sm:px-5">
               <span className="flex items-center gap-2 whitespace-nowrap font-display text-lg font-bold">
                 <HelpCircle className="h-5 w-5" /> Câu hỏi số {current + 1}
@@ -376,9 +390,9 @@ export default function TestTakingPage() {
               </span>
             </div>
 
-            <div className="p-5 sm:p-6">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-5">
               {/* Gắn cờ câu phân vân để quay lại xem sau */}
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-slate-400">{isFillQuestion ? "Điền đáp án vào ô trống" : isMulti ? "Chọn TẤT CẢ đáp án đúng (có thể nhiều hơn 1)" : "Chọn một đáp án đúng"}</p>
                 <button
                   id="flag-toggle"
@@ -396,13 +410,13 @@ export default function TestTakingPage() {
                   <kbd className={cn("hidden rounded px-1.5 text-xs font-black sm:inline", flags[question._id] ? "bg-white/25" : "bg-amber-100")}>F</kbd>
                 </button>
               </div>
-              <div className="rounded-xl border border-slate-200 p-5">
+              <div className={cn("flex min-h-0 flex-col rounded-xl border border-slate-200 p-4", question.imageUrl && "flex-1")}>
                 {question.imageUrl && (
-                  <div className="mb-3">
-                    <div className="flex justify-center overflow-auto rounded-xl bg-slate-50 p-3">
+                  <div className="mb-2 flex min-h-[5rem] flex-1 flex-col">
+                    <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl bg-slate-50 p-2">
                       <QuestionImage src={question.imageUrl} zoom={zoom} />
                     </div>
-                    <div className="mt-2 flex items-center justify-center gap-2">
+                    <div className="mt-1.5 flex shrink-0 items-center justify-center gap-2">
                       <button
                         type="button"
                         onClick={() => setZoom((z) => Math.max(50, z - 25))}
@@ -421,7 +435,7 @@ export default function TestTakingPage() {
                     </div>
                   </div>
                 )}
-                {!isFillQuestion && <p className="whitespace-pre-line text-2xl font-semibold leading-relaxed text-slate-800">{question.text}</p>}
+                {!isFillQuestion && <p className="shrink-0 whitespace-pre-line text-xl font-semibold leading-snug text-slate-800 sm:text-2xl">{question.text}</p>}
                 {isFillQuestion && <FillBlankPrompt text={question.text} value={selected || ""} onChange={setAnswer} />}
                 {(question.type === "listen_choice" || question.type === "listen_fill") && (
                   <button
@@ -435,7 +449,7 @@ export default function TestTakingPage() {
               </div>
 
               {!isFillQuestion && (
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="mt-3 grid shrink-0 grid-cols-1 gap-2.5 sm:grid-cols-2">
                   {question.choices.map((choice, idx) => {
                     const active = isPicked(idx);
                     const tf = question.type === "true_false";
@@ -470,7 +484,10 @@ export default function TestTakingPage() {
                             </span>
                           )}
                         </span>
-                        <span className="flex-1 px-4 py-3">{choice}</span>
+                        <span className="flex flex-1 flex-col items-start gap-1.5 px-4 py-2">
+                          {question.choiceImages?.[idx] && <img src={question.choiceImages[idx]} alt="" className="max-h-28 w-auto max-w-full rounded-xl object-contain" />}
+                          {choice}
+                        </span>
                       </button>
                     );
                   })}
@@ -479,8 +496,8 @@ export default function TestTakingPage() {
             </div>
           </div>
 
-          <div className="h-20" aria-hidden />
-          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/70 bg-white/90 backdrop-blur"><div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 xl:max-w-none xl:px-10 2xl:px-16 lg:pr-[calc(270px+2.5rem)] xl:pr-[calc(270px+4rem)] 2xl:pr-[calc(270px+6rem)]">
+          {/* Nút chuyển câu nằm ngay dưới thẻ câu hỏi (không cố định đáy màn hình) — cả trang vừa khít, không phải cuộn */}
+          <div className="shrink-0 pt-3"><div className="flex items-center justify-between gap-3">
             <Button
               disabled={current === 0}
               onClick={() => setCurrent((c) => c - 1)}
@@ -499,7 +516,7 @@ export default function TestTakingPage() {
         </div>
 
         {/* ===== Cột phải: thời gian, nộp bài, danh sách câu hỏi ===== */}
-        <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
+        <aside className="space-y-3 pb-3 lg:min-h-0 lg:overflow-y-auto lg:pb-0">
           <div className="hidden lg:block">
             <div
               className={cn(

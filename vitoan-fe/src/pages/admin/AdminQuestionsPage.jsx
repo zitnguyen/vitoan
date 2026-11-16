@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { Pencil, Trash2, X, CheckCircle2, Plus, Sparkles, Search } from "lucide-react";
+import { Pencil, Trash2, X, CheckCircle2, Plus, Sparkles, Search, Download, Upload } from "lucide-react";
 import { lessonService, questionService } from "../../api/services";
+import QuestionImportDialog, { exportQuestionsXlsx } from "../../components/admin/QuestionImportDialog.jsx";
+import { stamp } from "../../lib/excelIO";
 import Button from "../../components/ui/Button.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import AdminLessonHeader from "../../components/admin/AdminLessonHeader.jsx";
 import ImageUploadField from "../../components/admin/ImageUploadField.jsx";
+import ChoiceImageControl from "../../components/admin/ChoiceImageControl.jsx";
 import { AdminPage, Card, Field, IconButton, inputClass } from "../../components/admin/adminUi.jsx";
 import { cn } from "../../lib/utils";
 import { useDialog } from "../../context/DialogContext.jsx";
@@ -28,6 +31,7 @@ const EMPTY_FORM = {
   audioText: "",
   imageUrl: "",
   choices: ["", "", "", ""],
+  choiceImages: ["", "", "", ""],
   correctIndex: 0,
   correctIndexes: [],
   correctText: "",
@@ -51,6 +55,24 @@ export default function AdminQuestionsPage() {
   const [filter, setFilter] = useState("");
   const [version, setVersion] = useState(0);
   const [aiOpen, setAiOpen] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  async function exportExcel() {
+    setExporting(true);
+    try {
+      const res = await questionService.exportAll({ lesson: lessonId });
+      if (!res.data.length) {
+        await dialog.alert({ message: "Bài học này chưa có câu hỏi để xuất. Hãy dùng 'Nhập Excel' → tải tệp mẫu." });
+        return;
+      }
+      await exportQuestionsXlsx(res.data, `cau-hoi-${(lesson?.title || "bai-hoc").replace(/[\\/:*?"<>|]/g, "")}-${stamp()}.xlsx`);
+    } catch (err) {
+      await dialog.alert({ message: err.apiMessage || "Không xuất được tệp" });
+    } finally {
+      setExporting(false);
+    }
+  }
   const [aiCount, setAiCount] = useState(5);
   const [aiDifficulty, setAiDifficulty] = useState("easy");
   const [aiDrafts, setAiDrafts] = useState([]);
@@ -100,6 +122,7 @@ export default function AdminQuestionsPage() {
           ? [...question.choices]
           : [...question.choices, "", "", "", ""].slice(0, 4)
         : ["", "", "", ""],
+      choiceImages: [...(question.choiceImages || []), "", "", "", ""].slice(0, question.type === "true_false" ? 2 : 4),
       correctIndex: question.correctIndex || 0,
       correctIndexes: question.correctIndexes?.length ? [...question.correctIndexes] : [],
       correctText: question.correctText || "",
@@ -121,6 +144,7 @@ export default function AdminQuestionsPage() {
       ...f,
       type,
       choices: type === "true_false" ? ["Đúng", "Sai"] : f.choices.length === 2 ? ["", "", "", ""] : f.choices,
+      choiceImages: type === "true_false" ? ["", ""] : (f.choiceImages || []).length === 2 ? ["", "", "", ""] : f.choiceImages || ["", "", "", ""],
       correctIndex: 0,
       correctIndexes: [],
     }));
@@ -168,6 +192,8 @@ export default function AdminQuestionsPage() {
         correctIndexes: form.type === "multi_choice" ? form.correctIndexes : [],
         lesson: lessonId,
         choices: isFill ? [] : form.choices.map((c) => c.trim()),
+        // Ảnh đáp án song song với choices; nếu không đáp án nào có ảnh thì lưu mảng rỗng.
+        choiceImages: isFill || !(form.choiceImages || []).some(Boolean) ? [] : form.choices.map((_, i) => form.choiceImages?.[i] || ""),
         correctText: isFill ? form.correctText.trim() : "",
       };
       if (editingId) await questionService.update(editingId, payload);
@@ -203,6 +229,39 @@ export default function AdminQuestionsPage() {
     }
   }
 
+  function updateDraft(idx, patch) {
+    setAiDrafts((list) => list.map((d, i) => (i === idx ? { ...d, ...patch, error: "" } : d)));
+  }
+
+  // Lưu thẳng câu nháp (đã chỉnh) vào bài học.
+  async function saveDraft(idx) {
+    const d = aiDrafts[idx];
+    const choices = d.choices.map((c) => c.trim());
+    if (!d.text.trim()) return setAiDrafts((l) => l.map((x, i) => (i === idx ? { ...x, error: "Câu hỏi đang trống." } : x)));
+    const problem = choices.some((c) => !c)
+      ? "Cần điền đủ 4 đáp án."
+      : new Set(choices.map((c) => c.toLowerCase())).size !== 4
+        ? "Các đáp án không được trùng nhau."
+        : "";
+    if (problem) return setAiDrafts((l) => l.map((x, i) => (i === idx ? { ...x, error: problem } : x)));
+    try {
+      await questionService.create({
+        type: "multiple_choice",
+        text: d.text.trim(),
+        choices,
+        correctIndex: d.correctIndex,
+        explanation: (d.explanation || "").trim(),
+        difficulty: d.difficulty,
+        lesson: lessonId,
+        order: questions.length + 1,
+      });
+      setAiDrafts((l) => l.filter((_, i) => i !== idx));
+      await loadQuestions();
+    } catch (err) {
+      setAiDrafts((l) => l.map((x, i) => (i === idx ? { ...x, error: err.apiMessage || "Không lưu được" } : x)));
+    }
+  }
+
   function takeDraft(idx) {
     const d = aiDrafts[idx];
     setEditingId(null);
@@ -235,6 +294,12 @@ export default function AdminQuestionsPage() {
         </Button>
         <Button variant="outline" onClick={() => setAiOpen((o) => !o)} className="border-violet-200 text-violet-700 hover:bg-violet-50">
           <Sparkles className="h-4 w-4" /> Gợi ý câu hỏi bằng AI
+        </Button>
+        <Button variant="outline" onClick={exportExcel} disabled={exporting} title="Tải các câu của bài về Excel để sửa">
+          <Download className="h-4 w-4" /> {exporting ? "Đang xuất..." : "Xuất Excel"}
+        </Button>
+        <Button variant="outline" onClick={() => setShowImport(true)} title="Nhập Excel: dòng có mã chỉ cập nhật nếu đã sửa">
+          <Upload className="h-4 w-4" /> Nhập Excel
         </Button>
         {questions.length > 5 && (
           <div className="relative ml-auto w-full max-w-xs">
@@ -274,17 +339,49 @@ export default function AdminQuestionsPage() {
             <div className="mt-3 grid gap-2 md:grid-cols-2">
               {aiDrafts.map((d, idx) => (
                 <div key={idx} className="rounded-xl bg-white p-3 ring-1 ring-violet-100">
-                  <p className="font-semibold text-slate-800">{d.text}</p>
-                  <ul className="mt-1 text-sm text-slate-500">
+                  <textarea
+                    rows={2}
+                    className={cn(inputClass, "font-semibold")}
+                    value={d.text}
+                    onChange={(e) => updateDraft(idx, { text: e.target.value })}
+                    placeholder="Nội dung câu hỏi"
+                  />
+                  <div className="mt-2 space-y-1.5">
                     {d.choices.map((c, i) => (
-                      <li key={i} className={i === d.correctIndex ? "font-bold text-primary" : ""}>
-                        {"ABCD"[i]}. {c}
-                      </li>
+                      <div key={i} className={cn("flex items-center gap-2 rounded-xl border-2 p-1 pl-1.5", i === d.correctIndex ? "border-green-400 bg-green-50" : "border-slate-100")}>
+                        <button
+                          type="button"
+                          onClick={() => updateDraft(idx, { correctIndex: i })}
+                          title="Chọn làm đáp án đúng"
+                          className={cn(
+                            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold",
+                            i === d.correctIndex ? "border-green-500 bg-green-500 text-white" : "border-slate-300 text-slate-500"
+                          )}
+                        >
+                          {i === d.correctIndex ? <CheckCircle2 className="h-4 w-4" /> : "ABCD"[i]}
+                        </button>
+                        <input
+                          className={cn(inputClass, "py-1.5")}
+                          value={c}
+                          onChange={(e) => updateDraft(idx, { choices: d.choices.map((x, j) => (j === i ? e.target.value : x)) })}
+                          placeholder={`Đáp án ${"ABCD"[i]}`}
+                        />
+                      </div>
                     ))}
-                  </ul>
-                  <div className="mt-2 flex gap-2">
-                    <Button onClick={() => takeDraft(idx)} className="px-3 py-1.5 text-sm">
-                      Dùng câu này
+                  </div>
+                  <input
+                    className={cn(inputClass, "mt-2 py-1.5 text-sm")}
+                    value={d.explanation || ""}
+                    onChange={(e) => updateDraft(idx, { explanation: e.target.value })}
+                    placeholder="Giải thích (không bắt buộc)"
+                  />
+                  {d.error && <p className="mt-1.5 text-sm font-semibold text-red-600">{d.error}</p>}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button onClick={() => saveDraft(idx)} className="px-3 py-1.5 text-sm">
+                      Lưu luôn
+                    </Button>
+                    <Button variant="outline" onClick={() => takeDraft(idx)} className="px-3 py-1.5 text-sm" title="Mở form đầy đủ để thêm ảnh, đổi dạng câu…">
+                      Mở form đầy đủ
                     </Button>
                     <Button variant="outline" onClick={() => setAiDrafts((l) => l.filter((_, i) => i !== idx))} className="px-3 py-1.5 text-sm">
                       Bỏ
@@ -403,14 +500,30 @@ export default function AdminQuestionsPage() {
                     >
                       {isCorrectChoice(idx) ? <CheckCircle2 className="h-5 w-5" /> : "ABCD"[idx]}
                     </button>
-                    <input
-                      className={inputClass}
-                      value={choice}
-                      onChange={(e) => updateChoice(idx, e.target.value)}
-                      readOnly={form.type === "true_false"}
-                      placeholder={`Đáp án ${"ABCD"[idx]}`}
-                      required
-                    />
+                    <div className="min-w-0 flex-1">
+                      <input
+                        className={inputClass}
+                        value={choice}
+                        onChange={(e) => updateChoice(idx, e.target.value)}
+                        readOnly={form.type === "true_false"}
+                        placeholder={`Đáp án ${"ABCD"[idx]}`}
+                        required
+                      />
+                      {form.type !== "true_false" && (
+                        <ChoiceImageControl
+                          value={form.choiceImages?.[idx] || ""}
+                          onChange={(url) =>
+                            setForm((f) => {
+                              const imgs = [...(f.choiceImages || []), "", "", "", ""].slice(0, f.choices.length);
+                              imgs[idx] = url;
+                              return { ...f, choiceImages: imgs };
+                            })
+                          }
+                          choiceText={choice}
+                          questionText={form.text}
+                        />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -494,6 +607,14 @@ export default function AdminQuestionsPage() {
           <Card className="text-center text-slate-500">Bài học này chưa có câu hỏi. Bấm "Thêm câu hỏi" hoặc dùng AI để soạn nhanh.</Card>
         )}
       </div>
+      {showImport && (
+        <QuestionImportDialog
+          lessonId={lessonId}
+          lessonTitle={lesson?.title}
+          onClose={() => setShowImport(false)}
+          onImported={() => loadQuestions()}
+        />
+      )}
     </AdminPage>
   );
 }

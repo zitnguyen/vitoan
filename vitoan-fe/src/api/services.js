@@ -3,6 +3,7 @@ import axiosClient from "./axiosClient";
 export const authService = {
   register: (payload) => axiosClient.post("/auth/register", payload),
   verifyRegisterCode: (payload) => axiosClient.post("/auth/verify-register", payload),
+  resendRegister: (username) => axiosClient.post("/auth/resend-register", { username }),
   forgotPassword: (identifier) => axiosClient.post("/auth/forgot-password", { identifier }),
   verifyResetCode: (payload) => axiosClient.post("/auth/verify-reset-code", payload),
   resetPassword: (payload) => axiosClient.post("/auth/reset-password", payload),
@@ -40,6 +41,8 @@ export const lessonService = {
   update: (id, payload) => axiosClient.put(`/lessons/${id}`, payload),
   remove: (id) => axiosClient.delete(`/lessons/${id}`),
   toggleLike: (id) => axiosClient.post(`/lessons/${id}/like`),
+  exportRows: (params) => axiosClient.get("/lessons/export", { params, timeout: 60000 }),
+  importRows: (payload) => axiosClient.post("/lessons/import", payload, { timeout: 120000 }),
 };
 
 export const questionService = {
@@ -54,11 +57,13 @@ export const questionService = {
   remove: (id) => axiosClient.delete(`/questions/${id}`),
   tree: (params) => axiosClient.get("/questions/tree", { params }),
   bulk: (payload) => axiosClient.post("/questions/bulk", payload),
+  exportAll: (params) => axiosClient.get("/questions/export", { params, timeout: 120000 }),
 };
 
 export const userService = {
   listStudents: () => axiosClient.get("/users/students"),
   list: (params) => axiosClient.get("/users", { params }),
+  myRoles: () => axiosClient.get("/users/roles/mine"),
   getOne: (id) => axiosClient.get(`/users/${id}`),
   create: (payload) => axiosClient.post("/users", payload),
   update: (id, payload) => axiosClient.put(`/users/${id}`, payload),
@@ -129,6 +134,7 @@ export const attemptService = {
   lessonStatus: (chapter) => axiosClient.get("/attempts/lesson-status", { params: { chapter } }),
   stats: () => axiosClient.get("/attempts/stats"),
   weakKnowledge: (params) => axiosClient.get("/attempts/weak-knowledge", { params }),
+  weakReview: (params) => axiosClient.get("/attempts/weak-knowledge/ai-review", { params, timeout: 60000 }),
   record: (params) => axiosClient.get("/attempts/record", { params }),
   getLearning: (lesson) => axiosClient.get("/attempts/learning", { params: { lesson } }),
   saveLearning: (payload) => axiosClient.put("/attempts/learning", payload),
@@ -161,6 +167,8 @@ export const practiceSetService = {
   create: (payload) => axiosClient.post("/practice-sets", payload),
   update: (id, payload) => axiosClient.put(`/practice-sets/${id}`, payload),
   remove: (id) => axiosClient.delete(`/practice-sets/${id}`),
+  exportRows: (params) => axiosClient.get("/practice-sets/export", { params }),
+  importRows: (payload) => axiosClient.post("/practice-sets/import", payload, { timeout: 120000 }),
 };
 
 export const testService = {
@@ -228,6 +236,7 @@ export const articleService = {
 };
 
 export const uploadService = {
+  aiImage: (prompt) => axiosClient.post("/uploads/ai-image", { prompt }, { timeout: 90000 }),
   image: (file) => {
     const formData = new FormData();
     formData.append("image", file);

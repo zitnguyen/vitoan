@@ -8,6 +8,7 @@ import StudentLessonTicks from "../../components/admin/StudentLessonTicks.jsx";
 import { AdminPage, Card, Field, IconButton, inputClass } from "../../components/admin/adminUi.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { cn } from "../../lib/utils";
+import { ROLE_BADGE, ROLE_INFO, ROLE_LABEL } from "../../lib/roles.js";
 import { useDialog } from "../../context/DialogContext.jsx";
 
 const EMPTY_FORM = { fullName: "", username: "", email: "", phone: "", password: "", role: "Student", grade: "" };
@@ -32,6 +33,8 @@ export default function AdminAccountsPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [savingId, setSavingId] = useState(null);
+  // RBAC phân cấp: chỉ được gán vai trò thấp hơn mình (backend quyết định, trả về ở /users/roles/mine).
+  const [assignable, setAssignable] = useState(["Student"]);
 
   async function loadAccounts() {
     const res = await userService.list({
@@ -45,6 +48,7 @@ export default function AdminAccountsPage() {
 
   useEffect(() => {
     gradeService.list().then((res) => setGrades(res.data));
+    userService.myRoles().then((res) => setAssignable(res.data.assignable)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -151,14 +155,14 @@ export default function AdminAccountsPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="Vai trò">
               <div className="flex gap-2">
-                {[
-                  { v: "Student", l: "Học sinh" },
-                  { v: "Admin", l: "Quản trị viên" },
-                ].map((r) => (
+                {/* Sửa chính mình: giữ nguyên vai trò. Sửa người khác: chọn trong các vai trò thấp hơn mình (+ vai trò hiện tại). */}
+                {(editingId === me?.id ? [me.role] : [...new Set([...assignable, ...(editingId ? [form.role] : [])])])
+                  .map((v) => ({ v, l: ROLE_LABEL[v] || v }))
+                  .map((r) => (
                   <button
                     key={r.v}
                     type="button"
-                    disabled={editingId === me?.id && r.v !== "Admin"}
+                    disabled={editingId === me?.id || (editingId && !assignable.includes(r.v))}
                     onClick={() => setForm((f) => ({ ...f, role: r.v }))}
                     className={cn(
                       "flex-1 rounded-xl py-2.5 font-bold ring-1 disabled:opacity-40",
@@ -169,6 +173,23 @@ export default function AdminAccountsPage() {
                   </button>
                 ))}
               </div>
+              {ROLE_INFO[form.role] && (
+                <div className="mt-2 rounded-xl bg-slate-50 p-3 text-sm">
+                  <p className="font-bold text-slate-700">Quyền của {ROLE_LABEL[form.role]}:</p>
+                  <ul className="mt-1 space-y-0.5 text-green-700">
+                    {ROLE_INFO[form.role].can.map((t) => (
+                      <li key={t}>✓ {t}</li>
+                    ))}
+                  </ul>
+                  {ROLE_INFO[form.role].cannot.length > 0 && (
+                    <ul className="mt-1 space-y-0.5 text-red-500">
+                      {ROLE_INFO[form.role].cannot.map((t) => (
+                        <li key={t}>✗ Không được: {t}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </Field>
             {form.role === "Student" ? (
               <Field label="Lớp">
@@ -269,8 +290,11 @@ export default function AdminAccountsPage() {
         </div>
         <select className={cn(inputClass, "w-auto")} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
           <option value="">Mọi vai trò</option>
-          <option value="Student">Học sinh</option>
-          <option value="Admin">Quản trị viên</option>
+          {[...new Set(["Student", ...assignable, me?.role])].filter(Boolean).map((v) => (
+            <option key={v} value={v}>
+              {ROLE_LABEL[v] || v}
+            </option>
+          ))}
         </select>
         <select className={cn(inputClass, "w-auto")} value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
           <option value="">Mọi lớp</option>
@@ -321,8 +345,8 @@ export default function AdminAccountsPage() {
                       <p className="text-sm text-slate-400">@{a.username}</p>
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {a.role === "Admin" ? (
-                        <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-sm font-bold text-violet-700">Quản trị viên</span>
+                      {a.role !== "Student" ? (
+                        <span className={cn("rounded-full px-2.5 py-0.5 text-sm font-bold", ROLE_BADGE[a.role] || "bg-slate-100 text-slate-600")}>{ROLE_LABEL[a.role] || a.role}</span>
                       ) : (
                         a.grade?.name || <span className="text-slate-400">Chưa chọn lớp</span>
                       )}

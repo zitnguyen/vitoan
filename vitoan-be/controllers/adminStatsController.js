@@ -96,7 +96,7 @@ async function overview(req, res, next) {
       totalRedemptions,
     ] = await Promise.all([
       User.countDocuments({ role: "Student" }),
-      User.countDocuments({ role: "Admin" }),
+      User.countDocuments({ role: { $in: ["Manager", "Admin"] } }),
       Lesson.countDocuments(),
       Question.countDocuments(),
       PracticeSet.countDocuments(),

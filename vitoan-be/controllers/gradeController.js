@@ -1,9 +1,10 @@
 const Grade = require("../models/Grade");
 const Chapter = require("../models/Chapter");
+const { isStaff } = require("../utils/rbac");
 
 async function list(req, res, next) {
   try {
-    const isAdmin = req.user && req.user.role === "Admin";
+    const isAdmin = isStaff(req.user);
     const grades = await Grade.find(isAdmin ? {} : { isPublished: { $ne: false } }).sort({ order: 1 });
     res.json({ success: true, data: grades });
   } catch (err) {

@@ -14,6 +14,7 @@ const {
   clearProgress,
   myProgressList,
   myWeakKnowledge,
+  myWeakReview,
   getLearning,
   saveLearning,
   getRecord,
@@ -41,6 +42,7 @@ router.get("/record", protect, authorize("Student"), getRecord);
 router.get("/learning", protect, authorize("Student"), getLearning);
 router.put("/learning", protect, authorize("Student"), saveLearning);
 router.get("/weak-knowledge", protect, authorize("Student"), myWeakKnowledge);
+router.get("/weak-knowledge/ai-review", protect, authorize("Student"), myWeakReview);
 router.get("/progress", protect, authorize("Student"), getProgress);
 router.put("/progress", protect, authorize("Student"), saveProgress);
 router.delete("/progress", protect, authorize("Student"), clearProgress);

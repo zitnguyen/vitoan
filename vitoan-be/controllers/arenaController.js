@@ -59,7 +59,7 @@ function prevWeekKey(key) {
   return k;
 }
 
-const publicQuestion = (q) => ({ _id: q._id, type: q.type, text: q.text, audioText: q.audioText, imageUrl: q.imageUrl, choices: q.choices });
+const publicQuestion = (q) => ({ _id: q._id, type: q.type, text: q.text, audioText: q.audioText, imageUrl: q.imageUrl, choices: q.choices, choiceImages: q.choiceImages });
 
 async function pickQuestions(gradeId, subjectId, n = ARENA_SIZE) {
   const lessons = await Lesson.find({ grade: gradeId, subject: subjectId, isPublished: true }).select("_id");

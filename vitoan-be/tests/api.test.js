@@ -230,7 +230,7 @@ test("admin: thông báo chung kiểm tra đầu vào (không gửi thật để
 });
 
 test("admin: câu hỏi riêng của đề (không thuộc bài học) tạo/lọc/xoá được và không làm hỏng thống kê", async () => {
-  const q = await call("POST", "/questions", admin, { testOnly: true, type: "multiple_choice", text: "QA câu riêng", choices: ["1", "2"], correctIndex: 1 });
+  const q = await call("POST", "/questions", admin, { testOnly: true, type: "multiple_choice", text: "QA câu riêng", choices: ["1", "2", "3", "4"], correctIndex: 1 });
   assert.equal(q.status, 201);
   const id = q.body.data._id;
   const tree = (await call("GET", "/questions/tree", admin)).body;
@@ -241,4 +241,50 @@ test("admin: câu hỏi riêng của đề (không thuộc bài học) tạo/l�
   assert.equal((await call("POST", "/questions", admin, { type: "multiple_choice", text: "thiếu bài", choices: ["1", "2"], correctIndex: 0 })).status, 400);
   assert.equal((await call("GET", "/admin/report", admin)).status, 200);
   assert.equal((await call("DELETE", `/questions/${id}`, admin)).status, 200);
+});
+
+test("RBAC phân cấp: Admin tạo Quản lý; Quản lý chỉ quản lý được học sinh, không đụng được Admin/backup", async () => {
+  const MGR = { username: "qa_manager_tmp", password: "QaManager@12345" };
+  const MGR2 = { username: "qa_manager2_tmp", password: "QaManager@12345" };
+  const STU = { username: "qa_student_tmp", password: "QaStudent@12345" };
+  await User.deleteMany({ username: { $in: [MGR.username, MGR2.username, STU.username] } });
+  try {
+    // Admin tạo Quản lý
+    const m = await call("POST", "/users", admin, { fullName: "QA Quản lý", username: MGR.username, password: MGR.password, role: "Manager" });
+    assert.equal(m.status, 201);
+    assert.equal(m.body.data.role, "Manager");
+    const mgr = await login(MGR.username, MGR.password);
+    const mgrId = m.body.data.id;
+    // Quản lý vào được trang quản trị nội dung/thống kê nhưng không sao lưu/khôi phục
+    assert.equal((await call("GET", "/admin/stats", mgr)).status, 200);
+    assert.equal((await call("GET", "/questions/tree", mgr)).status, 200);
+    assert.equal((await call("GET", "/admin/backup", mgr)).status, 403);
+    assert.equal((await call("POST", "/admin/restore", mgr, {})).status, 403);
+    assert.equal((await call("GET", "/users/roles/mine", mgr)).body.data.assignable.join(), "Student");
+    assert.ok((await call("GET", "/users/roles/mine", admin)).body.data.assignable.includes("Manager"));
+    // Quản lý không tạo được Quản lý / Admin, nhưng tạo được học sinh
+    for (const role of ["Manager", "Admin"]) {
+      assert.equal((await call("POST", "/users", mgr, { fullName: "x y", username: MGR2.username, password: MGR2.password, role })).status, 403);
+    }
+    const s = await call("POST", "/users", mgr, { fullName: "QA HS", username: STU.username, password: STU.password, role: "Student" });
+    assert.equal(s.status, 201);
+    // Quản lý không thấy / sửa / khoá / đặt mật khẩu Admin; không tự nâng quyền
+    const adminId = (await User.findOne({ username: ADMIN.username }))._id;
+    assert.equal((await call("GET", `/users/${adminId}`, mgr)).status, 403);
+    assert.equal((await call("PUT", `/users/${adminId}`, mgr, { fullName: "hack", password: "hacked123" })).status, 403);
+    assert.equal((await call("PUT", `/users/${adminId}/status`, mgr, { status: "disabled" })).status, 403);
+    assert.equal((await call("PUT", `/users/${mgrId}`, mgr, { fullName: "QA Quản lý", role: "Admin" })).status, 400);
+    const seen = (await call("GET", "/users", mgr)).body.data;
+    assert.ok(!seen.some((u) => u.role === "Admin"), "Quản lý không được thấy tài khoản Admin");
+    assert.ok(seen.some((u) => u.id === s.body.data.id));
+    // Quản lý khoá được học sinh
+    assert.equal((await call("PUT", `/users/${s.body.data.id}/status`, mgr, { status: "suspended" })).status, 200);
+    // Admin quản lý được Quản lý (đặt lại mật khẩu, khoá)
+    assert.equal((await call("PUT", `/users/${mgrId}/status`, admin, { status: "suspended" })).status, 200);
+    assert.equal((await call("GET", "/admin/stats", mgr)).status, 401, "Quản lý bị khoá thì mất phiên");
+    // Học sinh vẫn không vào được khu quản trị
+    assert.equal((await call("GET", "/admin/stats", student)).status, 403);
+  } finally {
+    await User.deleteMany({ username: { $in: [MGR.username, MGR2.username, STU.username] } });
+  }
 });

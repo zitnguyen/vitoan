@@ -8,7 +8,7 @@ import { cn } from "../../lib/utils";
 export default function IdBadge({ id, label = "ID", className, always = false }) {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
-  if (!id || (!always && user?.role !== "Admin")) return null;
+  if (!id || (!always && user?.role !== "Admin" && user?.role !== "Manager")) return null;
 
   async function copy(e) {
     e.preventDefault();

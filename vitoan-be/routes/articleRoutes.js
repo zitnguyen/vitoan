@@ -5,12 +5,12 @@ const { protect, optionalAuth, authorize } = require("../middleware/authMiddlewa
 const router = express.Router();
 
 router.get("/", optionalAuth, list);
-router.get("/feeds", protect, authorize("Admin"), feeds);
-router.get("/feeds/:key", protect, authorize("Admin"), previewFeed);
-router.post("/import", protect, authorize("Admin"), importItems);
+router.get("/feeds", protect, authorize("Manager"), feeds);
+router.get("/feeds/:key", protect, authorize("Manager"), previewFeed);
+router.post("/import", protect, authorize("Manager"), importItems);
 router.get("/:id", optionalAuth, getOne);
-router.post("/", protect, authorize("Admin"), create);
-router.put("/:id", protect, authorize("Admin"), update);
-router.delete("/:id", protect, authorize("Admin"), remove);
+router.post("/", protect, authorize("Manager"), create);
+router.put("/:id", protect, authorize("Manager"), update);
+router.delete("/:id", protect, authorize("Manager"), remove);
 
 module.exports = router;

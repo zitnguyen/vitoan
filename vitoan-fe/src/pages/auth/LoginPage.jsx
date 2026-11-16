@@ -21,7 +21,7 @@ export default function LoginPage() {
 
   function goAfterLogin(user) {
     const from = location.state?.from?.pathname;
-    navigate(from || (user.role === "Admin" ? "/admin/bai-hoc" : "/"), { replace: true });
+    navigate(from || (user.role === "Admin" || user.role === "Manager" ? "/admin/bai-hoc" : "/"), { replace: true });
   }
 
   function goAfterGoogleAuth(user) {
@@ -35,7 +35,7 @@ export default function LoginPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.username.trim() || !form.password) {
-      setError("Vui lòng nhập tên đăng nhập/email và mật khẩu");
+      setError("Vui lòng nhập số điện thoại, email hoặc tên đăng nhập và mật khẩu");
       return;
     }
     setError("");
@@ -88,9 +88,10 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} noValidate className={isGoogleAuthEnabled ? "space-y-4" : "mt-6 space-y-4"}>
               <div>
                 <label className="text-sm font-medium text-slate-600">
-                  Tên đăng nhập hoặc Email <span className="text-red-500">*</span>
+                  Số điện thoại, Email hoặc Tên đăng nhập <span className="text-red-500">*</span>
                 </label>
                 <input
+                  autoComplete="username"
                   className={`mt-1 w-full rounded-xl border bg-slate-50 px-3 py-2.5 focus:bg-white focus:outline-none focus:ring-2 ${
                     error ? "border-red-400 focus:border-red-500 focus:ring-red-200" : "border-slate-200 focus:border-primary focus:ring-primary/20"
                   }`}

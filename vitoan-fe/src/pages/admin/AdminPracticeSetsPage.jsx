@@ -8,6 +8,22 @@ import Button from "../../components/ui/Button.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import { cn } from "../../lib/utils";
 import { useDialog } from "../../context/DialogContext.jsx";
+import ExcelButtons from "../../components/admin/ExcelButtons.jsx";
+import { cellStr, readRows, saveSheet, stamp } from "../../lib/excelIO";
+
+// Tệp Excel bài luyện tập: mỗi dòng = một câu của một bộ; các dòng cùng "Mã bộ" gộp thành một bộ.
+const SET_COLUMNS = [
+  { header: "Mã bộ (đừng sửa; để trống = bộ mới)", width: 26, readonly: true },
+  { header: "Tên bộ luyện tập", width: 30 },
+  { header: "Mức độ (de / trung_binh / kho)", width: 16 },
+  { header: "Thời gian (giây, 0 = không giới hạn)", width: 16 },
+  { header: "Hiện cho học sinh (có/không)", width: 14 },
+  { header: "Thứ tự bộ", width: 9 },
+  { header: "Mã câu hỏi (lấy ở tệp xuất của câu hỏi)", width: 26 },
+  { header: "Nội dung câu (chỉ để xem)", width: 60, readonly: true },
+];
+const LEVEL_OUT = { easy: "de", medium: "trung_binh", hard: "kho" };
+const LEVEL_IN = { de: "easy", "dễ": "easy", easy: "easy", trung_binh: "medium", "trung bình": "medium", medium: "medium", kho: "hard", "khó": "hard", hard: "hard" };
 
 const LEVEL_LABEL = { easy: "Dễ", medium: "Trung bình", hard: "Khó" };
 const EMPTY_FORM = { title: "", level: "easy", isPublished: true, questions: [] };
@@ -124,9 +140,41 @@ export default function AdminPracticeSetsPage() {
 
   const allChecked = form && form.questions.length === questions.length;
 
+  async function exportSets() {
+    const res = await practiceSetService.exportRows({ lesson: lessonId });
+    if (!res.data.length) throw Object.assign(new Error(), { apiMessage: "Bài này chưa có bộ luyện tập nào để xuất." });
+    const rows = res.data.map((r) => [r.setId, r.title, LEVEL_OUT[r.level] || "trung_binh", r.timeLimitSeconds, r.isPublished ? "có" : "không", r.order, r.questionId, r.questionText]);
+    await saveSheet(`luyen-tap-${(lesson?.title || "bai-hoc").replace(/[\\/:*?"<>|]/g, "")}-${stamp()}.xlsx`, SET_COLUMNS, rows);
+  }
+
+  async function importSets(file) {
+    const parsed = await readRows(file);
+    if (!parsed.length) throw new Error("Tệp không có dòng nào.");
+    const rows = parsed.map(({ cells: c, row }) => ({
+      row,
+      setId: cellStr(c[0]),
+      title: cellStr(c[1]),
+      level: LEVEL_IN[cellStr(c[2]).toLowerCase()] || "",
+      timeLimitSeconds: cellStr(c[3]),
+      isPublished: cellStr(c[4]),
+      order: cellStr(c[5]),
+      questionId: cellStr(c[6]),
+    }));
+    return (await practiceSetService.importRows({ lesson: lessonId, rows })).data;
+  }
+
   return (
     <AdminPage>
       <AdminLessonHeader lesson={lesson} active="luyen-tap" version={version} />
+
+      <div className="mb-3 flex justify-end">
+        <ExcelButtons
+          onExport={exportSets}
+          onImport={importSets}
+          onDone={() => loadSets()}
+          importHint="Nhập bộ luyện tập: dòng có mã bộ chỉ cập nhật nếu đã sửa, không có mã là bộ mới"
+        />
+      </div>
 
       <div className="mb-4 flex items-start gap-2 rounded-xl bg-secondary/5 px-4 py-3 text-slate-600 ring-1 ring-secondary/20">
         <Info className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />

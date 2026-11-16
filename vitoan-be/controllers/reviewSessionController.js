@@ -11,7 +11,7 @@ const POINTS_PER_CORRECT = 2;
 const DAILY_PAID = 10;
 const dayStart = (key) => new Date(`${key}T00:00:00Z`).getTime() - 7 * 3600 * 1000;
 
-const pub = (q) => ({ _id: q._id, type: q.type, text: q.text, audioText: q.audioText, imageUrl: q.imageUrl, choices: q.choices });
+const pub = (q) => ({ _id: q._id, type: q.type, text: q.text, audioText: q.audioText, imageUrl: q.imageUrl, choices: q.choices, choiceImages: q.choiceImages });
 
 // GET /practice-review/summary — có bao nhiêu câu cần ôn (hiện ở trang chủ / thống kê)
 async function summary(req, res, next) {

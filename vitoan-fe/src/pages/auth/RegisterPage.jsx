@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AlertCircle, KeyRound } from "../../components/ui/icons.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { gradeService } from "../../api/services";
+import { authService, gradeService } from "../../api/services";
 import Button from "../../components/ui/Button.jsx";
 import PasswordInput from "../../components/ui/PasswordInput.jsx";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
@@ -11,6 +11,8 @@ import GoogleSignInButton, { isGoogleAuthEnabled } from "../../components/auth/G
 import { Img3D } from "../../lib/icons3d.jsx";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Số di động Việt Nam hoặc số quốc tế dạng +<mã nước><số>.
+const PHONE_REGEX = /^((0|\+?84)[35789]\d{8}|\+[1-9]\d{7,14})$/;
 
 function FieldError({ message }) {
   if (!message) return null;
@@ -28,13 +30,17 @@ export default function RegisterPage() {
   const [step, setStep] = useState("form");
   const [form, setForm] = useState({
     fullName: "",
-    username: "",
     password: "",
     confirmPassword: "",
     email: "",
+    phone: "",
     grade: "",
   });
-  const [maskedEmail, setMaskedEmail] = useState("");
+  // Đăng ký bằng số điện thoại hoặc email (chọn 1 trong 2); tên đăng nhập do hệ thống tự tạo.
+  const [contactType, setContactType] = useState("phone");
+  const [registered, setRegistered] = useState({ username: "", channel: "phone", maskedTarget: "" });
+  const [devCode, setDevCode] = useState("");
+  const [cooldown, setCooldown] = useState(0);
   const [code, setCode] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
@@ -51,11 +57,19 @@ export default function RegisterPage() {
     gradeService.list().then((res) => setGrades(res.data));
   }, []);
 
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
   function validate() {
     const errors = {};
     if (!form.fullName.trim()) errors.fullName = "Vui lòng nhập họ và tên";
-    if (!form.username.trim()) errors.username = "Vui lòng nhập tên đăng nhập";
-    if (!form.email.trim()) errors.email = "Vui lòng nhập email";
+    if (contactType === "phone") {
+      if (!form.phone.trim()) errors.phone = "Vui lòng nhập số điện thoại";
+      else if (!PHONE_REGEX.test(form.phone.replace(/[\s.\-()]/g, ""))) errors.phone = "Số điện thoại không đúng định dạng";
+    } else if (!form.email.trim()) errors.email = "Vui lòng nhập email";
     else if (!EMAIL_REGEX.test(form.email.trim())) errors.email = "Email không đúng định dạng";
     if (!form.password) errors.password = "Vui lòng nhập mật khẩu";
     else if (form.password.length < 6) errors.password = "Mật khẩu phải có ít nhất 6 ký tự";
@@ -82,13 +96,23 @@ export default function RegisterPage() {
     setFormError("");
     setSubmitting(true);
     try {
-      const res = await register(form);
-      setMaskedEmail(res.maskedEmail || "");
+      const payload = {
+        fullName: form.fullName,
+        password: form.password,
+        confirmPassword: form.confirmPassword,
+        grade: form.grade,
+        ...(contactType === "phone" ? { phone: form.phone } : { email: form.email }),
+      };
+      const res = await register(payload);
+      setRegistered({ username: res.username, channel: res.channel, maskedTarget: res.maskedTarget || "" });
+      setDevCode(res.devCode || "");
+      setCode("");
+      setCooldown(60);
       setStep("otp");
     } catch (err) {
       const message = err.apiMessage || "Đăng ký thất bại";
-      if (message.includes("Tên đăng nhập")) {
-        setFieldErrors({ username: message });
+      if (message.includes("Số điện thoại")) {
+        setFieldErrors({ phone: message });
       } else if (message.includes("Email")) {
         setFieldErrors({ email: message });
       } else {
@@ -110,7 +134,7 @@ export default function RegisterPage() {
     setFormError("");
     setSubmitting(true);
     try {
-      const user = await verifyRegisterCode({ username: form.username, code });
+      const user = await verifyRegisterCode({ username: registered.username, code });
       if (user.role === "Student" && !user.grade) {
         navigate("/chon-lop", { replace: true });
       } else {
@@ -119,6 +143,21 @@ export default function RegisterPage() {
     } catch (err) {
       setFormError(err.apiMessage || "Mã xác nhận không đúng hoặc đã hết hạn");
       triggerShake();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleResend() {
+    if (cooldown > 0 || submitting) return;
+    setFormError("");
+    setSubmitting(true);
+    try {
+      const res = await authService.resendRegister(registered.username);
+      setDevCode(res.data?.devCode || "");
+      setCooldown(60);
+    } catch (err) {
+      setFormError(err.apiMessage || "Không gửi lại được mã, thử lại sau");
     } finally {
       setSubmitting(false);
     }
@@ -184,26 +223,59 @@ export default function RegisterPage() {
                     <FieldError message={fieldErrors.fullName} />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-slate-600">
-                      Tên đăng nhập <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      className={fieldClass("username")}
-                      value={form.username}
-                      onChange={(e) => updateField("username", e.target.value)}
-                    />
-                    <FieldError message={fieldErrors.username} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-slate-600">
-                      Email (để khôi phục mật khẩu) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      className={fieldClass("email")}
-                      value={form.email}
-                      onChange={(e) => updateField("email", e.target.value)}
-                    />
-                    <FieldError message={fieldErrors.email} />
+                    <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="tablist">
+                      {[
+                        { id: "phone", label: "Số điện thoại" },
+                        { id: "email", label: "Email" },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={contactType === tab.id}
+                          onClick={() => {
+                            setContactType(tab.id);
+                            setFieldErrors((prev) => ({ ...prev, phone: "", email: "" }));
+                          }}
+                          className={`rounded-lg py-2 text-sm font-semibold transition ${
+                            contactType === tab.id ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                    {contactType === "phone" ? (
+                      <div className="mt-3">
+                        <label className="text-sm font-medium text-slate-600">
+                          Số điện thoại (nhận mã xác nhận) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          className={fieldClass("phone")}
+                          value={form.phone}
+                          onChange={(e) => updateField("phone", e.target.value)}
+                          inputMode="tel"
+                          autoComplete="tel"
+                          placeholder="0912 345 678 hoặc +1 415 555 0123"
+                        />
+                        <FieldError message={fieldErrors.phone} />
+                      </div>
+                    ) : (
+                      <div className="mt-3">
+                        <label className="text-sm font-medium text-slate-600">
+                          Email (nhận mã xác nhận) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          className={fieldClass("email")}
+                          value={form.email}
+                          onChange={(e) => updateField("email", e.target.value)}
+                          inputMode="email"
+                          autoComplete="email"
+                          placeholder="ten@email.com"
+                        />
+                        <FieldError message={fieldErrors.email} />
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="text-sm font-medium text-slate-600">
@@ -261,11 +333,18 @@ export default function RegisterPage() {
               </>
             ) : (
               <>
-                <h1 className="font-display text-h2 text-slate-800">Xác nhận email</h1>
+                <h1 className="font-display text-h2 text-slate-800">
+                  {registered.channel === "phone" ? "Xác nhận số điện thoại" : "Xác nhận email"}
+                </h1>
                 <p className="mt-2 text-caption text-slate-500">
-                  Mã gồm 6 chữ số đã gửi tới email{" "}
-                  <span className="font-semibold text-slate-700">{maskedEmail}</span>. Nhập mã để hoàn tất đăng ký.
+                  Mã gồm 6 chữ số đã gửi tới {registered.channel === "phone" ? "số" : "email"}{" "}
+                  <span className="font-semibold text-slate-700">{registered.maskedTarget}</span>. Nhập mã để hoàn tất đăng ký.
                 </p>
+                {devCode && (
+                  <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-caption text-amber-800">
+                    Chế độ thử nghiệm (chưa bật SMS thật): mã của em là <span className="font-black tracking-widest">{devCode}</span>
+                  </p>
+                )}
                 <form onSubmit={handleVerify} noValidate className="mt-6 space-y-4">
                   <div>
                     <label className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
@@ -284,6 +363,14 @@ export default function RegisterPage() {
                   <Button type="submit" className="w-full py-2.5" disabled={submitting}>
                     {submitting ? "Đang xác nhận..." : "Xác nhận"}
                   </Button>
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={cooldown > 0 || submitting}
+                    className="w-full text-center text-caption font-semibold text-primary disabled:text-slate-400"
+                  >
+                    {cooldown > 0 ? `Gửi lại mã sau ${cooldown}s` : "Gửi lại mã"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setStep("form")}

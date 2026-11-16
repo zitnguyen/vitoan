@@ -391,9 +391,9 @@ export default function PlayQuizPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="flex h-dvh flex-col overflow-hidden">
       {/* Top bar: lùi 1 cấp về bài học, tên môn · lớp, điểm tích luỹ, thời gian */}
-      <div className="sticky top-0 z-30 bg-gradient-to-r from-sky-400 via-blue-500 to-violet-500 px-4 py-2.5 shadow-[0_8px_24px_-12px_rgba(59,130,246,0.7)]">
+      <div className="relative z-30 shrink-0 bg-gradient-to-r from-sky-400 via-blue-500 to-violet-500 px-4 py-2.5 shadow-[0_8px_24px_-12px_rgba(59,130,246,0.7)]">
         <div className="mx-auto flex max-w-6xl items-center gap-3 sm:px-2 xl:max-w-none xl:px-6 2xl:px-12">
           <Link
             to={meta?.lessonId ? `/bai/${meta.lessonId}` : "/"}
@@ -420,9 +420,9 @@ export default function PlayQuizPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 xl:max-w-none xl:px-10 2xl:px-16">
+      <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-4 pb-2 pt-3 sm:px-6 xl:max-w-none xl:px-10 2xl:px-16">
         {/* Lộ trình làm bài: bấm để xem lại / nhảy tới câu */}
-        <div className="mb-4 flex items-center gap-2 rounded-2xl bg-white p-2.5 shadow-elevation-1">
+        <div className="mb-3 flex shrink-0 items-center gap-2 rounded-2xl bg-white p-2 shadow-elevation-1">
           <div className="flex flex-1 flex-wrap gap-1.5">
             {questions.map((q, idx) => {
               const r = checked[q._id];
@@ -457,7 +457,7 @@ export default function PlayQuizPage() {
         </div>
 
         {isStudent && record && (
-          <div className="mb-4 flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-2.5 text-body text-amber-900 ring-1 ring-amber-200">
+          <div className="mb-3 flex shrink-0 items-start gap-2 rounded-2xl bg-amber-50 px-4 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
             <Gem className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
             <p>
               {record.attempts > 0 ? (
@@ -475,7 +475,7 @@ export default function PlayQuizPage() {
         )}
 
         {resumed && (
-          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200">
+          <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2 rounded-2xl bg-amber-50 px-4 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
             <span className="flex-1">
               Em đang làm tiếp lộ trình dở: đã xong {checkedCount}/{questions.length} câu, tích luỹ {runningPoints} điểm.
             </span>
@@ -485,7 +485,7 @@ export default function PlayQuizPage() {
           </div>
         )}
 
-        <div className="relative rounded-3xl bg-white p-6 shadow-elevation-2 sm:p-8">
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <button
             type="button"
             onClick={handleGetHint}
@@ -496,6 +496,7 @@ export default function PlayQuizPage() {
           >
             <OwlMascot className="h-12 w-12" animated shake={hintLoading} />
           </button>
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-3xl bg-white p-4 shadow-elevation-2 sm:p-6">
 
           <div className="flex items-center justify-between pr-12">
             <span className="flex items-center gap-2">
@@ -522,11 +523,11 @@ export default function PlayQuizPage() {
           )}
 
           {question.imageUrl && (
-            <div className="mt-4">
-              <div className="flex justify-center overflow-auto rounded-xl bg-slate-50 p-4">
+            <div className="mt-3 flex min-h-[5rem] flex-1 flex-col">
+              <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl bg-slate-50 p-2">
                 <QuestionImage src={question.imageUrl} zoom={zoom} />
               </div>
-              <div className="mt-2 flex items-center justify-center gap-2">
+              <div className="mt-1.5 flex shrink-0 items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={() => setZoom((z) => Math.max(50, z - 25))}
@@ -546,7 +547,7 @@ export default function PlayQuizPage() {
             </div>
           )}
 
-          {!isFillQuestion && <p className="mt-4 whitespace-pre-line text-2xl font-semibold leading-relaxed text-slate-800">{question.text}</p>}
+          {!isFillQuestion && <p className="mt-3 shrink-0 whitespace-pre-line text-xl font-semibold leading-snug text-slate-800 sm:text-2xl">{question.text}</p>}
           {isMulti && <p className="mt-2 inline-block rounded-full bg-violet-100 px-3 py-1 text-sm font-bold text-violet-700">Chọn tất cả đáp án đúng (có thể nhiều hơn 1)</p>}
 
           {(question.type === "listen_choice" || question.type === "listen_fill") && (
@@ -562,7 +563,7 @@ export default function PlayQuizPage() {
           {isFillQuestion ? (
             <FillBlankPrompt text={question.text} value={selected || ""} onChange={setTextAnswer} disabled={isLocked} />
           ) : question.type === "true_false" ? (
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="mt-3 grid shrink-0 grid-cols-2 gap-2.5">
               {question.choices.map((choice, idx) => {
                 const isTrueOption = /^đúng$/i.test(choice.trim());
                 const isCorrectChoice = isLocked && idx === currentResult.correctIndex;
@@ -574,7 +575,7 @@ export default function PlayQuizPage() {
                     disabled={isLocked}
                     onClick={() => selectChoice(idx)}
                     className={cn(
-                      "flex flex-col items-center gap-2 rounded-2xl px-4 py-6 font-bold ring-2 transition",
+                      "flex flex-col items-center gap-1.5 rounded-2xl px-4 py-4 font-bold ring-2 transition",
                       isCorrectChoice && "border-primary bg-primary/10 text-primary",
                       isWrongPick && "border-red-400 bg-red-50 text-red-600",
                       !isLocked &&
@@ -592,7 +593,7 @@ export default function PlayQuizPage() {
               })}
             </div>
           ) : (
-            <div className="mt-5 grid grid-cols-2 gap-3 lg:max-h-[55vh] lg:overflow-y-auto lg:pr-1">
+            <div className="mt-3 grid shrink-0 grid-cols-2 gap-2.5">
               {question.choices.map((choice, idx) => {
                 const isCorrectChoice = isLocked && (isMulti ? (currentResult.correctIndexes || []).includes(idx) : idx === currentResult.correctIndex);
                 const isWrongPick = isLocked && isPicked(idx) && !isCorrectChoice;
@@ -603,7 +604,7 @@ export default function PlayQuizPage() {
                       disabled={isLocked}
                       onClick={() => selectChoice(idx)}
                       className={cn(
-                        "flex min-h-[4.5rem] w-full flex-col items-center justify-center gap-1 rounded-2xl px-12 py-3 text-center text-lg font-bold ring-2 transition",
+                        "flex min-h-[3rem] w-full flex-col items-center justify-center gap-1 rounded-2xl px-12 py-1.5 text-center text-lg font-bold ring-2 transition",
                         isCorrectChoice && "border-primary bg-primary/10 text-primary",
                         isWrongPick && "border-red-400 bg-red-50 text-red-600",
                         !isLocked &&
@@ -630,6 +631,7 @@ export default function PlayQuizPage() {
                           )}
                         </span>
                       )}
+                      {question.choiceImages?.[idx] && <img src={question.choiceImages[idx]} alt="" className="mb-1 max-h-28 w-auto max-w-full rounded-xl object-contain" />}
                       {choice}
                     </button>
                     {!isLocked && (
@@ -647,13 +649,14 @@ export default function PlayQuizPage() {
               })}
             </div>
           )}
+          </div>
         </div>
 
         {/* Kết quả câu vừa kiểm tra hiện dạng popup; đóng popup thì còn 1 dòng tóm tắt để mở lại. */}
         {isLocked && (
           <div
             className={cn(
-              "mt-4 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 ring-1",
+              "mt-3 flex shrink-0 flex-wrap items-center gap-3 rounded-2xl px-4 py-2 ring-1",
               currentResult.correct ? "bg-emerald-50 ring-emerald-100" : "bg-rose-50 ring-rose-100"
             )}
           >
@@ -700,7 +703,7 @@ export default function PlayQuizPage() {
         )}
 
         {isLocked && (
-          <div className="mt-4">
+          <div className="mt-3 shrink-0">
             {allChecked ? (
               <Button onClick={handleSubmit} disabled={submitting} className="rounded-full px-8">
                 <Send className="h-4 w-4" /> {submitting ? "Đang nộp bài..." : `Hoàn thành & nhận ${runningPoints} 💎`}
@@ -713,11 +716,11 @@ export default function PlayQuizPage() {
           </div>
         )}
 
-        {/* Điều hướng: Câu trước · Kiểm tra (giữa) · Câu sau */}
-        {/* Thanh điều hướng dính đáy màn hình: nút luôn ở một chỗ dù câu hỏi dài/ngắn khác nhau */}
-        <div className="h-20" aria-hidden />
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/70 bg-white/90 backdrop-blur">
-          <div className="mx-auto grid max-w-6xl grid-cols-3 items-center gap-3 px-4 py-3 sm:px-6 xl:max-w-none xl:px-10 2xl:px-16">
+      </div>
+
+        {/* Điều hướng: Câu trước · Kiểm tra (giữa) · Câu sau — thanh cố định cuối khung; trang vừa khít màn hình nên không cần cuộn */}
+        <div className="z-30 shrink-0 border-t border-slate-200/70 bg-white/90 backdrop-blur">
+          <div className="mx-auto grid max-w-6xl grid-cols-3 items-center gap-3 px-4 py-2.5 sm:px-6 xl:max-w-none xl:px-10 2xl:px-16">
           <div>
             <Button variant="outline" disabled={current === 0} onClick={() => goTo(current - 1)} className="rounded-full px-5">
               <ChevronLeft className="h-4 w-4" /> Câu trước
@@ -737,7 +740,6 @@ export default function PlayQuizPage() {
           </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }

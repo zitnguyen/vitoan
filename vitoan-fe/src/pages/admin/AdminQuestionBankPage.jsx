@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, ChevronRight, ChevronDown, Pencil, Trash2, FolderTree, X } from "lucide-react";
+import { Search, ChevronRight, ChevronDown, Pencil, Trash2, FolderTree, X, Download, Upload } from "lucide-react";
 import { gradeService, questionService } from "../../api/services";
 import Spinner from "../../components/ui/Spinner.jsx";
+import Button from "../../components/ui/Button.jsx";
+import QuestionImportDialog, { exportQuestionsXlsx } from "../../components/admin/QuestionImportDialog.jsx";
+import { stamp } from "../../lib/excelIO";
 import { cn } from "../../lib/utils";
 import { AdminHeader, adminPageClass } from "../../components/admin/adminUi.jsx";
 import { useDialog } from "../../context/DialogContext.jsx";
@@ -111,6 +114,33 @@ export default function AdminQuestionBankPage() {
   const [expanded, setExpanded] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [showTree, setShowTree] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // Xuất đúng tập câu đang lọc (danh mục + tìm kiếm + loại + mức độ), không chỉ trang hiện tại.
+  async function exportExcel() {
+    setExporting(true);
+    try {
+      const res = await questionService.exportAll({
+        search: search || undefined,
+        grade: grade || undefined,
+        subject: scope.subject,
+        chapter: scope.chapter,
+        lesson: scope.lesson,
+        difficulty: difficulty || undefined,
+        type: type || undefined,
+      });
+      if (!res.data.length) {
+        await dialog.alert({ message: "Không có câu hỏi nào để xuất." });
+        return;
+      }
+      await exportQuestionsXlsx(res.data, `cau-hoi-${stamp()}.xlsx`);
+    } catch (err) {
+      await dialog.alert({ message: err.apiMessage || "Không xuất được tệp" });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   useEffect(() => {
     gradeService.list().then((r) => {
@@ -197,6 +227,16 @@ export default function AdminQuestionBankPage() {
     <div className={adminPageClass}>
       <AdminHeader
         className="mb-0"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={exportExcel} disabled={exporting || scope.custom} className="px-3 py-1.5 text-sm" title="Tải về các câu đang lọc (cả các trang khác)">
+              <Download className="h-4 w-4" /> {exporting ? "Đang xuất..." : "Xuất Excel"}
+            </Button>
+            <Button variant="outline" onClick={() => setShowImport(true)} className="px-3 py-1.5 text-sm" title="Nhập tệp Excel: dòng có mã chỉ cập nhật nếu đã sửa">
+              <Upload className="h-4 w-4" /> Nhập Excel
+            </Button>
+          </div>
+        }
         title="Ngân hàng câu hỏi"
         subtitle={`${total.toLocaleString("vi-VN")} câu hỏi${scopeLabel ? ` trong "${scopeLabel}"` : ""} — chọn danh mục bên trái, bấm vào câu để xem nhanh, chọn nhiều câu để sửa hàng loạt.`}
       />
@@ -354,6 +394,14 @@ export default function AdminQuestionBankPage() {
           )}
         </section>
       </div>
+      {showImport && (
+        <QuestionImportDialog
+          lessonId={scope.lesson}
+          lessonTitle={scopeLabel}
+          onClose={() => setShowImport(false)}
+          onImported={() => setReloadKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }

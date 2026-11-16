@@ -8,6 +8,7 @@ import UserAvatar from "../../components/common/UserAvatar.jsx";
 import OwlMascot from "../../components/illustrations/OwlMascot.jsx";
 import { IconTile, adminPageClass } from "../../components/admin/adminUi.jsx";
 import { cn } from "../../lib/utils";
+import { can } from "../../lib/roles.js";
 
 // Trang tổng quan quản trị: lời chào, số liệu chính, biểu đồ hoạt động 7 ngày, lối tắt và học sinh mới.
 function StatCard({ label, value, Icon, color, to }) {
@@ -237,7 +238,7 @@ export default function AdminDashboardPage() {
           )}
         </section>
       </div>
-      <BackupCard />
+      {can(user, "system.backup") && <BackupCard />}
     </div>
   );
 }

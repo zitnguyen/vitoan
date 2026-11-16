@@ -22,6 +22,26 @@ import IdBadge from "../../components/common/IdBadge.jsx";
 import { AdminPage, Card, Field, IconButton, StatusChip, inputClass } from "../../components/admin/adminUi.jsx";
 import { cn } from "../../lib/utils";
 import { useDialog } from "../../context/DialogContext.jsx";
+import ExcelButtons from "../../components/admin/ExcelButtons.jsx";
+import { cellStr, readRows, saveSheet, stamp } from "../../lib/excelIO";
+
+// Cột tệp Excel bài học (cột "readonly" là mã/thông tin tham khảo — đừng sửa).
+const LESSON_COLUMNS = [
+  { header: "Mã bài (đừng sửa; để trống = thêm bài mới)", width: 26, readonly: true },
+  { header: "Học kỳ (1/2)", width: 10 },
+  { header: "Chủ đề", width: 38 },
+  { header: "Tên bài học", width: 40 },
+  { header: "Mô tả ngắn", width: 36 },
+  { header: "Thứ tự", width: 8 },
+  { header: "Hiện cho học sinh (có/không)", width: 14 },
+  { header: "Cho khách học thử (có/không)", width: 14 },
+  { header: "Số câu ngẫu nhiên mỗi lượt luyện tập (0 = tất cả)", width: 18 },
+  { header: "Lý thuyết", width: 60 },
+  { header: "Ví dụ (mỗi dòng một ví dụ)", width: 40 },
+  { header: "Link video", width: 36 },
+  { header: "Số câu hỏi (chỉ để xem)", width: 12, readonly: true },
+];
+const yesNo = (v) => (v ? "có" : "không");
 
 const EMPTY_CHAPTER = { title: "", semester: 1 };
 const EMPTY_LESSON = { title: "", description: "", isPublished: true, isTrial: false, randomQuestionCount: 0 };
@@ -46,14 +66,37 @@ function Tabs({ items, value, onChange, getLabel }) {
   );
 }
 
-// Đổi chỗ phần tử i với i+dir rồi đánh lại thứ tự 1..n, chỉ gửi API cho phần tử có thứ tự thay đổi.
-async function moveItem(list, index, dir, update) {
+// Tiền tố đánh số mặc định: "Chủ đề N: …" và "Bài N: …" (N theo vị trí trong danh sách).
+const CHAPTER_LABEL = { word: "Chủ đề", re: /^\s*Chủ đề\s*\d+\s*[:.\-–]\s*/i };
+const LESSON_LABEL = { word: "Bài", re: /^\s*Bài\s*\d+\s*[:.\-–]\s*/i };
+const prefixOf = (label, n) => `${label.word} ${n}: `;
+
+// Đánh lại thứ tự 1..n và số trong tên (chỉ với tên đã có tiền tố "Bài N:"/"Chủ đề N:"); chỉ gửi API cho phần tử thay đổi.
+async function renumber(list, update, label) {
+  await Promise.all(
+    list.map((item, i) => {
+      const patch = {};
+      if (item.order !== i + 1) patch.order = i + 1;
+      if (label.re.test(item.title)) {
+        const title = prefixOf(label, i + 1) + item.title.replace(label.re, "");
+        if (title !== item.title) patch.title = title;
+      }
+      return Object.keys(patch).length ? update(item._id, patch) : null;
+    })
+  );
+}
+
+// Đổi chỗ phần tử i với i+dir rồi đánh số lại.
+async function moveItem(list, index, dir, update, label) {
   const target = index + dir;
   if (target < 0 || target >= list.length) return;
   const next = [...list];
   [next[index], next[target]] = [next[target], next[index]];
-  await Promise.all(next.map((item, i) => (item.order !== i + 1 ? update(item._id, { order: i + 1 }) : null)));
+  await renumber(next, update, label);
 }
+
+// Danh sách chủ đề theo thứ tự thật: học kỳ 1 trước, học kỳ 2 sau.
+const sortChapters = (list) => [...list].sort((a, b) => (a.semester || 1) - (b.semester || 1) || a.order - b.order);
 
 function isLessonMissing(l) {
   return !l.hasVideo || !l.hasContent || l.questionCount === 0;
@@ -84,10 +127,12 @@ export default function AdminLessonsPage() {
   const subject = subjects.find((s) => s._id === subjectId);
   const grade = grades.find((g) => g._id === gradeId);
 
-  async function setParams(next) {
+  // Đổi Môn/Lớp/Chủ đề chỉ thay mục lịch sử hiện tại (replace) để bấm Lùi là thoát về trang trước,
+  // không phải bấm nhiều lần qua từng tab đã chọn; vào bài học rồi Lùi vẫn về đúng chủ đề (tham số nằm trên URL).
+  async function setParams(next, { replace = true } = {}) {
     const merged = { mon: subjectId, lop: gradeId, "chu-de": chapterId, ...next };
     Object.keys(merged).forEach((k) => !merged[k] && delete merged[k]);
-    setSearchParams(merged, { replace: true });
+    setSearchParams(merged, { replace });
   }
 
   useEffect(() => {
@@ -127,7 +172,7 @@ export default function AdminLessonsPage() {
   }, [chapterId]);
 
   useEffect(() => {
-    if (!chapterId && chapters.length > 0) setParams({ "chu-de": chapters[0]._id });
+    if (!chapterId && chapters.length > 0) setParams({ "chu-de": chapters[0]._id }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapters, chapterId]);
 
@@ -165,14 +210,17 @@ export default function AdminLessonsPage() {
     if (!(await dialog.confirm({ message: `Xoá chủ đề "${chapter.title}"?`, danger: true, confirmText: "Xoá" }))) return;
     run(async () => {
       await chapterService.remove(chapter._id);
-      setParams({ "chu-de": "" });
+      setParams({ "chu-de": "" }, { replace: true });
+      await renumber(sortChapters(chapters).filter((c) => c._id !== chapter._id), chapterService.update, CHAPTER_LABEL);
       await loadChapters();
     });
   }
 
+  // Đánh số toàn môn/lớp (HK1 rồi HK2) để thứ tự không bị trộn giữa hai học kỳ.
   async function moveChapter(list, index, dir) {
     run(async () => {
-      await moveItem(list, index, dir, chapterService.update);
+      const all = sortChapters(chapters);
+      await moveItem(all, all.findIndex((c) => c._id === list[index]._id), dir, chapterService.update, CHAPTER_LABEL);
       await loadChapters();
     });
   }
@@ -207,13 +255,42 @@ export default function AdminLessonsPage() {
     if (!(await dialog.confirm({ message: `Xoá bài học "${lesson.title}"? Toàn bộ ${lesson.questionCount} câu hỏi của bài học cũng bị xoá.`, danger: true, confirmText: "Xoá" }))) return;
     run(async () => {
       await lessonService.remove(lesson._id);
+      await renumber(lessons.filter((l) => l._id !== lesson._id), lessonService.update, LESSON_LABEL);
       await Promise.all([loadLessons(), loadChapters()]);
     });
   }
 
+  async function exportLessons() {
+    const res = await lessonService.exportRows({ subject: subjectId, grade: gradeId });
+    const rows = res.data.map((l) => [l._id, l.semester, l.chapter, l.title, l.description, l.order, yesNo(l.isPublished), yesNo(l.isTrial), l.randomQuestionCount, l.content, (l.examples || []).join("\n"), l.videoUrl, l.questionCount]);
+    await saveSheet(`bai-hoc-${subject?.name || "mon"}-${grade?.name || "lop"}-${stamp()}.xlsx`, LESSON_COLUMNS, rows);
+  }
+
+  async function importLessonsFile(file) {
+    const parsed = await readRows(file);
+    if (!parsed.length) throw new Error("Tệp không có dòng nào.");
+    const rows = parsed.map(({ cells: c, row }) => ({
+      row,
+      _id: cellStr(c[0]),
+      semester: cellStr(c[1]),
+      chapter: cellStr(c[2]),
+      title: cellStr(c[3]),
+      description: cellStr(c[4]),
+      order: cellStr(c[5]),
+      isPublished: cellStr(c[6]),
+      isTrial: cellStr(c[7]),
+      randomQuestionCount: cellStr(c[8]),
+      content: c[9] === null || c[9] === undefined ? "" : String(c[9]),
+      examples: cellStr(c[10]).split(/\r?\n/),
+      videoUrl: cellStr(c[11]),
+    }));
+    const res = await lessonService.importRows({ subject: subjectId, grade: gradeId, rows });
+    return res.data;
+  }
+
   function moveLesson(index, dir) {
     run(async () => {
-      await moveItem(lessons, index, dir, lessonService.update);
+      await moveItem(lessons, index, dir, lessonService.update, LESSON_LABEL);
       await loadLessons();
     });
   }
@@ -230,7 +307,18 @@ export default function AdminLessonsPage() {
   const missingCount = lessons.filter(isLessonMissing).length;
 
   return (
-    <AdminPage title="Bài học & chủ đề" subtitle="Chọn Môn → Lớp → Chủ đề, rồi bấm vào một bài học để soạn lý thuyết, video, câu hỏi và bài luyện tập.">
+    <AdminPage
+      title="Bài học & chủ đề"
+      subtitle="Chọn Môn → Lớp → Chủ đề, rồi bấm vào một bài học để soạn lý thuyết, video, câu hỏi và bài luyện tập."
+      actions={
+        <ExcelButtons
+          onExport={exportLessons}
+          onImport={importLessonsFile}
+          onDone={() => Promise.all([loadChapters(), loadLessons()])}
+          importHint={`Nhập bài học cho ${subject?.name || ""} ${grade?.name || ""}: dòng có mã chỉ cập nhật nếu đã sửa, dòng không có mã là bài mới`}
+        />
+      }
+    >
       <Card className="space-y-2.5 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <span className="w-12 shrink-0 font-bold text-slate-400">Môn</span>
@@ -249,7 +337,7 @@ export default function AdminLessonsPage() {
         <Card className="p-3 lg:self-start">
           <div className="flex items-center justify-between px-1">
             <p className="font-display text-lg font-bold text-slate-800">Chủ đề ({chapters.length})</p>
-            <Button onClick={() => setChapterForm({ ...EMPTY_CHAPTER })} className="px-3 py-1.5 text-sm">
+            <Button onClick={() => setChapterForm({ ...EMPTY_CHAPTER, title: prefixOf(CHAPTER_LABEL, chapters.length + 1) })} className="px-3 py-1.5 text-sm">
               <Plus className="h-4 w-4" /> Thêm chủ đề
             </Button>
           </div>
@@ -363,7 +451,7 @@ export default function AdminLessonsPage() {
                   </p>
                   <h2 className="font-display text-h3 leading-tight text-slate-800">{activeChapter.title}</h2>
                 </div>
-                <Button onClick={() => setLessonForm({ ...EMPTY_LESSON })}>
+                <Button onClick={() => setLessonForm({ ...EMPTY_LESSON, title: prefixOf(LESSON_LABEL, lessons.length + 1) })}>
                   <Plus className="h-4 w-4" /> Thêm bài học
                 </Button>
               </div>

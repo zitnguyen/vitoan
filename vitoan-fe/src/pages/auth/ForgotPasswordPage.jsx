@@ -61,7 +61,8 @@ export default function ForgotPasswordPage() {
   const toast = useToast();
   const [step, setStep] = useState(1);
   const [identifier, setIdentifier] = useState("");
-  const [maskedEmail, setMaskedEmail] = useState("");
+  const [sent, setSent] = useState({ channel: "email", maskedTarget: "" });
+  const [devCode, setDevCode] = useState("");
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
@@ -78,7 +79,7 @@ export default function ForgotPasswordPage() {
   async function handleRequestCode(e) {
     e.preventDefault();
     if (!identifier.trim()) {
-      setError("Vui lòng nhập tên đăng nhập hoặc email");
+      setError("Vui lòng nhập số điện thoại, email hoặc tên đăng nhập");
       triggerShake();
       return;
     }
@@ -86,8 +87,9 @@ export default function ForgotPasswordPage() {
     setSubmitting(true);
     try {
       const res = await authService.forgotPassword(identifier);
-      setMaskedEmail(res.data?.maskedEmail || "");
-      toast.success("Đã gửi mã xác nhận tới email của bạn.");
+      setSent({ channel: res.data?.channel || "email", maskedTarget: res.data?.maskedTarget || "" });
+      setDevCode(res.data?.devCode || "");
+      toast.success(res.data?.channel === "phone" ? "Đã gửi mã xác nhận tới số điện thoại của em." : "Đã gửi mã xác nhận tới email của em.");
       setStep(2);
     } catch (err) {
       setError(err.apiMessage || "Có lỗi xảy ra, thử lại sau");
@@ -161,7 +163,7 @@ export default function ForgotPasswordPage() {
             <Img3D name="sparkles" className="absolute bottom-12 left-12 h-10 w-10 animate-[float-soft_4.5s_ease-in-out_infinite]" />
             <OwlMascot className="relative h-44 w-44 drop-shadow-[0_16px_20px_rgba(11,35,64,0.18)]" covering={passwordFocused} shake={shake} />
             <h2 className="relative mt-4 font-display text-3xl font-black text-[#0b2340]">Quên mật khẩu?</h2>
-            <p className="relative mt-2 max-w-xs font-semibold text-slate-600">Đừng lo, chỉ mất một phút để lấy lại mật khẩu qua email.</p>
+            <p className="relative mt-2 max-w-xs font-semibold text-slate-600">Đừng lo, chỉ mất một phút để lấy lại mật khẩu qua số điện thoại hoặc email.</p>
           </div>
 
           <div className="flex flex-col justify-center p-8 sm:p-10">
@@ -171,12 +173,12 @@ export default function ForgotPasswordPage() {
               <>
                 <h1 className="font-display text-h2 text-slate-800">Tìm tài khoản của em</h1>
                 <p className="mt-2 text-caption text-slate-500">
-                  Nhập tên đăng nhập hoặc email đã đăng ký, mã xác nhận sẽ được gửi tới email gắn với tài khoản đó.
+                  Nhập số điện thoại, email hoặc tên đăng nhập đã đăng ký. Mã xác nhận sẽ được gửi tới số điện thoại hoặc email gắn với tài khoản đó.
                 </p>
                 <form onSubmit={handleRequestCode} noValidate className="mt-6 space-y-4">
                   <div>
                     <label className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
-                      <User className="h-4 w-4" /> Tên đăng nhập hoặc Email <span className="text-red-500">*</span>
+                      <User className="h-4 w-4" /> Số điện thoại, Email hoặc Tên đăng nhập <span className="text-red-500">*</span>
                     </label>
                     <input
                       className={fieldClass(Boolean(error))}
@@ -196,9 +198,14 @@ export default function ForgotPasswordPage() {
               <>
                 <h1 className="font-display text-h2 text-slate-800">Nhập mã xác nhận</h1>
                 <p className="mt-2 text-caption text-slate-500">
-                  Mã gồm 6 chữ số đã gửi tới email{" "}
-                  <span className="font-semibold text-slate-700">{maskedEmail}</span> gắn với tài khoản này.
+                  Mã gồm 6 chữ số đã gửi tới {sent.channel === "phone" ? "số điện thoại" : "email"}{" "}
+                  <span className="font-semibold text-slate-700">{sent.maskedTarget}</span> gắn với tài khoản này.
                 </p>
+                {devCode && (
+                  <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-caption text-amber-800">
+                    Chế độ thử nghiệm (chưa bật SMS thật): mã của em là <span className="font-black tracking-widest">{devCode}</span>
+                  </p>
+                )}
                 <form onSubmit={handleVerifyCode} noValidate className="mt-6 space-y-4">
                   <div>
                     <label className="flex items-center gap-1.5 text-sm font-medium text-slate-600">

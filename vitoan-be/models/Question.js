@@ -1,5 +1,18 @@
 const mongoose = require("mongoose");
 
+// Câu trắc nghiệm phải có ĐÚNG 4 đáp án (không để lẻ); câu Đúng/Sai có 2.
+// Ngoại lệ: câu nghe "Có/Không" (listen_choice) giữ 2 đáp án.
+function choicesProblem(type, choices) {
+  if (type === "fill_blank" || type === "listen_fill") return null;
+  const arr = Array.isArray(choices) ? choices : [];
+  if (type === "true_false") return arr.length === 2 ? null : "Câu Đúng/Sai cần đúng 2 đáp án";
+  if (type === "listen_choice" && arr.length === 2 && arr[0] === "Có" && arr[1] === "Không") return null;
+  if (arr.length !== 4) return "Câu trắc nghiệm cần đúng 4 đáp án";
+  if (arr.some((c) => !String(c).trim())) return "Không được để trống đáp án";
+  if (new Set(arr.map((c) => String(c).trim().toLowerCase())).size !== 4) return "Các đáp án không được trùng nhau";
+  return null;
+}
+
 const questionSchema = new mongoose.Schema(
   {
     // Câu hỏi thuộc bài học nào. Câu "riêng của đề kiểm tra" (testOnly) không thuộc bài học/chương nào,
@@ -29,12 +42,16 @@ const questionSchema = new mongoose.Schema(
       default: [],
       validate: {
         validator: function validateChoices(arr) {
-          if (this.type === "fill_blank" || this.type === "listen_fill") return true;
-          return Array.isArray(arr) && arr.length >= 2 && arr.length <= 4;
+          // Với findByIdAndUpdate `this` là Query (không có type) — controller tự kiểm tra bằng choicesProblem.
+          if (!this.type) return true;
+          const problem = choicesProblem(this.type, arr);
+          return !problem;
         },
-        message: "Cần từ 2 đến 4 đáp án lựa chọn",
+        message: "Câu trắc nghiệm cần đúng 4 đáp án (không trống, không trùng nhau)",
       },
     },
+    // Ảnh riêng cho từng đáp án (song song với `choices`; "" = đáp án không có ảnh).
+    choiceImages: { type: [String], default: [] },
     correctIndex: {
       type: Number,
       min: 0,
@@ -74,4 +91,6 @@ const questionSchema = new mongoose.Schema(
 
 questionSchema.index({ lesson: 1, order: 1 });
 
-module.exports = mongoose.model("Question", questionSchema);
+const Question = mongoose.model("Question", questionSchema);
+Question.choicesProblem = choicesProblem;
+module.exports = Question;

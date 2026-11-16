@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { atLeast, can } = require("../utils/rbac");
 
 function extractToken(req) {
   const header = req.headers.authorization || "";
@@ -39,14 +40,26 @@ async function optionalAuth(req, res, next) {
   next();
 }
 
+// RBAC phân cấp: authorize("Manager") cho Quản lý VÀ Admin (cấp cao kế thừa quyền cấp thấp),
+// authorize("Admin") chỉ Admin. "Student" là vai trò riêng của học sinh nên chỉ khớp chính xác.
 function authorize(...roles) {
-  const allowed = roles.map((r) => r.toLowerCase());
   return (req, res, next) => {
-    if (!req.user || !allowed.includes(String(req.user.role).toLowerCase())) {
+    const ok =
+      req.user &&
+      roles.some((r) => (r === "Student" ? req.user.role === "Student" : atLeast(req.user, r)));
+    if (!ok) return res.status(403).json({ success: false, message: "Không có quyền truy cập" });
+    next();
+  };
+}
+
+// Chặn theo quyền cụ thể (đã kế thừa theo cấp), vd. requirePermission("system.backup").
+function requirePermission(...perms) {
+  return (req, res, next) => {
+    if (!req.user || !perms.every((p) => can(req.user, p))) {
       return res.status(403).json({ success: false, message: "Không có quyền truy cập" });
     }
     next();
   };
 }
 
-module.exports = { protect, optionalAuth, authorize };
+module.exports = { protect, optionalAuth, authorize, requirePermission };

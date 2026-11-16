@@ -7,6 +7,7 @@ const { buildTestFeedback } = require("../utils/analysis");
 const { learningStatus } = require("./testController");
 const User = require("../models/User");
 const { checkAndAwardBadges } = require("./attemptController");
+const { isStaff } = require("../utils/rbac");
 
 // Điểm tích luỹ khi làm bài kiểm tra: cũng chỉ cộng phần tiến bộ so với lần tốt nhất trước đó của
 // cùng đề (15 điểm/câu đúng thêm, +30 lần đầu đạt tuyệt đối) để không "cày" một đề dễ.
@@ -31,7 +32,7 @@ async function submit(req, res, next) {
       return res.status(400).json({ success: false, message: "Thiếu dữ liệu bài làm" });
     }
     const test = await Test.findById(testId).select("_id questions subject grade chapter semester isActive");
-    if (!test || (!test.isActive && req.user.role !== "Admin")) {
+    if (!test || (!test.isActive && !isStaff(req.user))) {
       return res.status(404).json({ success: false, message: "Không tìm thấy bài kiểm tra" });
     }
     if (req.user.role === "Student") {
@@ -87,7 +88,7 @@ async function submit(req, res, next) {
 async function getOne(req, res, next) {
   try {
     const attempt = await TestAttempt.findById(req.params.id)
-      .populate({ path: "answers.question", select: "type text imageUrl choices correctIndex correctIndexes correctText explanation lesson", populate: { path: "lesson", select: "title order chapter", populate: { path: "chapter", select: "title order" } } })
+      .populate({ path: "answers.question", select: "type text imageUrl choices choiceImages correctIndex correctIndexes correctText explanation lesson", populate: { path: "lesson", select: "title order chapter", populate: { path: "chapter", select: "title order" } } })
       .populate({
         path: "test",
         select: "title testType level subject grade chapter",
@@ -98,7 +99,7 @@ async function getOne(req, res, next) {
         ],
       });
     if (!attempt) return res.status(404).json({ success: false, message: "Không tìm thấy lượt làm bài" });
-    if (String(attempt.student) !== String(req.user._id) && req.user.role !== "Admin") {
+    if (String(attempt.student) !== String(req.user._id) && !isStaff(req.user)) {
       return res.status(403).json({ success: false, message: "Không có quyền xem" });
     }
 
@@ -129,7 +130,7 @@ async function aiReview(req, res, next) {
       .populate({ path: "answers.question", select: "type text explanation" })
       .populate("test", "title");
     if (!attempt) return res.status(404).json({ success: false, message: "Không tìm thấy lượt làm bài" });
-    if (String(attempt.student) !== String(req.user._id) && req.user.role !== "Admin") {
+    if (String(attempt.student) !== String(req.user._id) && !isStaff(req.user)) {
       return res.status(403).json({ success: false, message: "Không có quyền xem" });
     }
 

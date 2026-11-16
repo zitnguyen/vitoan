@@ -311,7 +311,10 @@ function ReviewCard({ answer }) {
                 >
                   {LETTERS[choiceIdx] ?? choiceIdx + 1}
                 </span>
-                <span className="flex-1">{choice}</span>
+                <span className="flex flex-1 flex-col items-start gap-1">
+                  {q.choiceImages?.[choiceIdx] && <img src={q.choiceImages[choiceIdx]} alt="" className="max-h-20 w-auto max-w-full rounded-lg object-contain" />}
+                  {choice}
+                </span>
                 {missed && <span className="shrink-0 text-xs font-bold">(em chưa chọn)</span>}
                 {picked && isCorrect && <span className="shrink-0 text-xs font-bold">(em chọn)</span>}
                 {isCorrect && <CheckCircle2 className="h-4 w-4 shrink-0" />}

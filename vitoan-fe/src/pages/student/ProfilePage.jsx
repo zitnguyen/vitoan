@@ -71,8 +71,15 @@ function compressImage(file, maxSize = 512, quality = 0.85) {
   });
 }
 
+// +84912345678 / 84912345678 -> 0912345678 để so với số đã lưu.
+function toLocalPhone(digits) {
+  if (digits.startsWith("+84")) return `0${digits.slice(3)}`;
+  if (digits.startsWith("84") && digits.length === 11) return `0${digits.slice(2)}`;
+  return digits;
+}
+
 export default function ProfilePage() {
-  const { user, updateProfile, uploadAvatar, setGrade, updatePreferences } = useAuth();
+  const { user, updateProfile, uploadAvatar, setGrade, updatePreferences, sendPhoneCode, verifyPhoneCode } = useAuth();
   const toast = useToast();
   const fileInputRef = useRef(null);
   const [form, setForm] = useState({
@@ -87,6 +94,44 @@ export default function ProfilePage() {
   const [grades, setGrades] = useState([]);
   const [gradeId, setGradeId] = useState(user?.grade?._id || "");
   const [savingGrade, setSavingGrade] = useState(false);
+  // Xác thực số điện thoại bằng OTP: otp = null (chưa gửi) hoặc { maskedTarget, devCode }.
+  const [otp, setOtp] = useState(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpBusy, setOtpBusy] = useState(false);
+
+  const phoneDigits = form.phone.replace(/[\s.\-()]/g, "");
+  const phoneIsVerified = Boolean(user?.phoneVerified && user?.phone && phoneDigits && toLocalPhone(phoneDigits) === user.phone);
+  const phoneLooksValid = /^((0|\+?84)[35789]\d{8}|\+[1-9]\d{7,14})$/.test(phoneDigits);
+
+  async function handleSendPhoneCode() {
+    setOtpBusy(true);
+    setFieldErrors((prev) => ({ ...prev, phone: "" }));
+    try {
+      const res = await sendPhoneCode(form.phone);
+      setOtp({ maskedTarget: res?.maskedTarget || "", devCode: res?.devCode || "" });
+      setOtpCode("");
+    } catch (err) {
+      setFieldErrors((prev) => ({ ...prev, phone: err.apiMessage || "Không gửi được mã, thử lại sau" }));
+    } finally {
+      setOtpBusy(false);
+    }
+  }
+
+  async function handleVerifyPhone() {
+    if (!otpCode.trim()) return;
+    setOtpBusy(true);
+    try {
+      const updated = await verifyPhoneCode(otpCode.trim());
+      setForm((f) => ({ ...f, phone: updated.phone || f.phone }));
+      setOtp(null);
+      setOtpCode("");
+      toast.success("Đã xác thực số điện thoại!");
+    } catch (err) {
+      setFieldErrors((prev) => ({ ...prev, phone: err.apiMessage || "Mã xác nhận không đúng hoặc đã hết hạn" }));
+    } finally {
+      setOtpBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (user?.role === "Student") gradeService.list().then((res) => setGrades(res.data));
@@ -314,8 +359,60 @@ export default function ProfilePage() {
               <input
                 className={inputClass}
                 value={form.phone}
-                onChange={(e) => updateField("phone", e.target.value)}
+                inputMode="tel"
+                placeholder="0912 345 678"
+                onChange={(e) => {
+                  updateField("phone", e.target.value);
+                  setOtp(null);
+                }}
               />
+              <FieldError message={fieldErrors.phone} />
+              {phoneDigits && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                  {phoneIsVerified ? (
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Đã xác thực, dùng được để đăng nhập</span>
+                  ) : (
+                    <>
+                      <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">Chưa xác thực</span>
+                      {phoneLooksValid && (
+                        <button
+                          type="button"
+                          onClick={handleSendPhoneCode}
+                          disabled={otpBusy}
+                          className="rounded-full bg-primary/10 px-2.5 py-1 text-primary hover:bg-primary/20 disabled:opacity-50"
+                        >
+                          {otp ? "Gửi lại mã" : "Gửi mã xác thực"}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {otp && !phoneIsVerified && (
+                <div className="mt-3 rounded-2xl bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">
+                    Mã 6 số đã gửi tới <span className="font-semibold text-slate-700">{otp.maskedTarget}</span>.
+                  </p>
+                  {otp.devCode && (
+                    <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Chế độ thử nghiệm: mã của em là <span className="font-black tracking-widest">{otp.devCode}</span>
+                    </p>
+                  )}
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      className={`${inputClass} !mt-0`}
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      maxLength={6}
+                      inputMode="numeric"
+                      placeholder="Nhập mã"
+                    />
+                    <Button type="button" onClick={handleVerifyPhone} disabled={otpBusy || !otpCode.trim()} className="shrink-0 px-4">
+                      Xác nhận
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div>

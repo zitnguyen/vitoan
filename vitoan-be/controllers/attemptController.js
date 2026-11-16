@@ -20,7 +20,9 @@ const {
   learningForLessons,
 } = require("../utils/progress");
 const LessonProgress = require("../models/LessonProgress");
-const { levelRemark, breakdownByLesson, weakKnowledge } = require("../utils/analysis");
+const { levelRemark, breakdownByLesson, weakKnowledge, weakReviewPrompt } = require("../utils/analysis");
+const { chatCompletion } = require("../utils/ai");
+const { isStaff } = require("../utils/rbac");
 
 // Điểm tích luỹ khi luyện tập: chỉ cộng phần tiến bộ so với lần tốt nhất trước đó của
 // cùng bài (10 điểm/câu đúng thêm, +20 lần đầu đạt tuyệt đối) — khuyến khích làm tốt
@@ -292,6 +294,35 @@ async function myWeakKnowledge(req, res, next) {
   }
 }
 
+// Nhận xét của AI dựa trên thống kê lỗi sai. Lưu tạm theo (học sinh, môn) và chỉ gọi lại AI khi em có thêm bài làm mới,
+// để mở trang nhiều lần không tốn lượt AI.
+const weakReviewCache = new Map();
+const WEAK_REVIEW_TTL_MS = 24 * 60 * 60 * 1000;
+async function myWeakReview(req, res, next) {
+  try {
+    const subject = req.query.subject || "";
+    const [attempts, testAttempts] = await Promise.all([
+      Attempt.find({ student: req.user._id }).select("answers").lean(),
+      TestAttempt.find({ student: req.user._id }).select("answers").lean(),
+    ]);
+    const stats = await weakKnowledge([...attempts, ...testAttempts], { subject: subject || undefined });
+    if (stats.totalAnswered === 0) return res.json({ success: true, data: { review: "" } });
+
+    const sig = `${stats.totalAnswered}:${stats.totalWrong}`;
+    const key = `${req.user._id}|${subject}`;
+    const hit = weakReviewCache.get(key);
+    if (hit && hit.sig === sig && Date.now() - hit.at < WEAK_REVIEW_TTL_MS) return res.json({ success: true, data: { review: hit.review, cached: true } });
+
+    const subjectName = subject ? (await Subject.findById(subject).select("name").lean())?.name : "";
+    const review = (await chatCompletion([{ role: "user", content: weakReviewPrompt(stats, subjectName) }], { maxTokens: 700, temperature: 0.6 })).trim();
+    weakReviewCache.set(key, { sig, review, at: Date.now() });
+    res.json({ success: true, data: { review } });
+  } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ success: false, message: err.message });
+    next(err);
+  }
+}
+
 async function submitGuest(req, res, next) {
   try {
     const { lesson: lessonId, answers, durationSeconds } = req.body;
@@ -350,7 +381,7 @@ async function submitGuest(req, res, next) {
 async function getOne(req, res, next) {
   try {
     const attempt = await Attempt.findById(req.params.id)
-      .populate({ path: "answers.question", select: "type text imageUrl choices correctIndex correctIndexes correctText explanation lesson", populate: { path: "lesson", select: "title order chapter", populate: { path: "chapter", select: "title order" } } })
+      .populate({ path: "answers.question", select: "type text imageUrl choices choiceImages correctIndex correctIndexes correctText explanation lesson", populate: { path: "lesson", select: "title order chapter", populate: { path: "chapter", select: "title order" } } })
       .populate({
         path: "lesson",
         select: "title subject grade chapter",
@@ -361,7 +392,7 @@ async function getOne(req, res, next) {
       })
       .populate("practiceSet", "title");
     if (!attempt) return res.status(404).json({ success: false, message: "Không tìm thấy lượt làm bài" });
-    if (String(attempt.student) !== String(req.user._id) && req.user.role !== "Admin") {
+    if (String(attempt.student) !== String(req.user._id) && !isStaff(req.user)) {
       return res.status(403).json({ success: false, message: "Không có quyền xem" });
     }
     const percent = attempt.totalQuestions ? Math.round((attempt.score / attempt.totalQuestions) * 100) : 0;
@@ -587,6 +618,7 @@ module.exports = {
   clearProgress,
   myProgressList,
   myWeakKnowledge,
+  myWeakReview,
   getRecord,
   getLearning,
   saveLearning,

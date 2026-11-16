@@ -60,6 +60,19 @@ export function AuthProvider({ children }) {
     return res.data.user;
   }, []);
 
+  const sendPhoneCode = useCallback(async (phone) => {
+    const res = await axiosClient.post("/auth/phone/send", { phone });
+    return res.data;
+  }, []);
+
+  const verifyPhoneCode = useCallback(async (code) => {
+    const res = await axiosClient.post("/auth/phone/verify", { code });
+    const auth = getStoredAuth();
+    setStoredAuth({ ...auth, user: res.data.user });
+    setUser(res.data.user);
+    return res.data.user;
+  }, []);
+
   const updateProfile = useCallback(async (payload) => {
     const res = await axiosClient.put("/auth/profile", payload);
     const auth = getStoredAuth();
@@ -133,6 +146,8 @@ export function AuthProvider({ children }) {
         loginWithGoogle,
         setGrade,
         updateProfile,
+        sendPhoneCode,
+        verifyPhoneCode,
         updatePreferences,
         uploadAvatar,
         changePassword,

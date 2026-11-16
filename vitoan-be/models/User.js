@@ -15,9 +15,14 @@ const userSchema = new mongoose.Schema(
     },
     googleId: { type: String, unique: true, sparse: true },
     avatarUrl: { type: String },
+    // Dạng chuẩn 0xxxxxxxxx. Chỉ số đã xác thực mới dùng để đăng nhập/lấy lại mật khẩu và phải duy nhất.
     phone: { type: String, trim: true },
+    phoneVerified: { type: Boolean, default: false },
+    // Khoá tạm tài khoản khi nhập sai mật khẩu nhiều lần.
+    failedLoginCount: { type: Number, default: 0 },
+    lockUntil: { type: Date },
     dateOfBirth: { type: Date },
-    role: { type: String, enum: ["Student", "Admin"], default: "Student" },
+    role: { type: String, enum: ["Student", "Manager", "Admin"], default: "Student" },
     grade: { type: mongoose.Schema.Types.ObjectId, ref: "Grade" },
     // Điểm thưởng tích luỹ được từ hoàn thành nhiệm vụ, dùng để đổi quà.
     points: { type: Number, default: 0, min: 0 },
@@ -37,6 +42,8 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phoneVerified: true } });
 
 userSchema.pre("save", async function preSave() {
   if (!this.isModified("password")) return;

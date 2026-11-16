@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Article = require("../models/Article");
 const { FEEDS, fetchFeed } = require("../utils/newsFeeds");
+const { isStaff } = require("../utils/rbac");
 
 const EDITABLE = ["title", "summary", "content", "imageUrl", "category", "sourceName", "sourceUrl", "publishedAt", "isPublished", "isFeatured"];
 
@@ -18,7 +19,7 @@ function escapeRegex(s) {
 // GET /articles — công khai: chỉ bài đã đăng. Admin (?all=1) thấy cả bài ẩn.
 async function list(req, res, next) {
   try {
-    const isAdmin = req.user?.role === "Admin" && req.query.all === "1";
+    const isAdmin = isStaff(req.user) && req.query.all === "1";
     const filter = isAdmin ? {} : { isPublished: true };
     if (req.query.category) filter.category = req.query.category;
     if (req.query.source) filter.sourceName = req.query.source;
@@ -47,7 +48,7 @@ async function getOne(req, res, next) {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(404).json({ success: false, message: "Không tìm thấy bài viết" });
     }
-    const isAdmin = req.user?.role === "Admin";
+    const isAdmin = isStaff(req.user);
     const article = await Article.findOneAndUpdate(
       { _id: req.params.id, ...(isAdmin ? {} : { isPublished: true }) },
       { $inc: { viewCount: 1 } },

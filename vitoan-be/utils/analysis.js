@@ -207,4 +207,37 @@ async function weakKnowledge(attempts, { subject } = {}) {
   };
 }
 
-module.exports = { levelRemark, breakdownByLesson, buildTestFeedback, weakKnowledge };
+// Lời nhắc cho AI viết nhận xét từ thống kê lỗi sai (chỉ đưa số liệu thật, không có tên/thông tin cá nhân của em).
+function weakReviewPrompt(stats, subjectName) {
+  const correctAnswer = (q) => (q.correctText ? q.correctText : q.choices?.[q.correctIndex] ?? "");
+  const lines = [];
+  lines.push(`Thống kê làm bài (luyện tập + kiểm tra) của một học sinh tiểu học${subjectName ? ` môn ${subjectName}` : ""}:`);
+  lines.push(`- Tổng: ${stats.totalAnswered} câu đã làm, sai ${stats.totalWrong}, đúng ${stats.correctPercent}%.`);
+  const weakLessons = stats.lessons.filter((g) => g.wrong > 0).slice(0, 6);
+  if (weakLessons.length) {
+    lines.push("- Bài học có câu sai (nhiều nhất trước):");
+    for (const g of weakLessons) lines.push(`  • "${g.title}"${g.chapter?.title ? ` (${g.chapter.title})` : ""}: sai ${g.wrong}/${g.total} câu (${g.wrongPercent}%)`);
+  }
+  const goodLessons = stats.lessons.filter((g) => g.wrong === 0 && g.total >= 3).slice(0, 3);
+  if (goodLessons.length) lines.push(`- Bài làm đúng hết: ${goodLessons.map((g) => `"${g.title}"`).join(", ")}.`);
+  if (stats.chapters.length) {
+    lines.push("- Theo chủ đề: " + stats.chapters.slice(0, 4).map((c) => `"${c.title}" sai ${c.wrongPercent}%`).join("; ") + ".");
+  }
+  const qs = stats.frequentWrongQuestions.slice(0, 4);
+  if (qs.length) {
+    lines.push("- Câu hay sai:");
+    for (const f of qs) lines.push(`  • "${String(f.question.text).replace(/s+/g, " ").slice(0, 100)}" (đáp án đúng: ${String(correctAnswer(f.question)).slice(0, 40)}) — sai ${f.wrong}/${f.total} lần`);
+  }
+  lines.push(
+    "",
+    "Hãy viết nhận xét bằng tiếng Việt, xưng \"em\", giọng thân thiện với trẻ nhỏ, gồm 4–6 gạch đầu dòng ngắn (mỗi dòng bắt đầu bằng \"- \"):",
+    "1) nhận xét chung về mức độ làm bài (khen điểm tốt nếu có);",
+    "2) chỉ ra 2–3 phần kiến thức em hay sai, nêu số liệu thật ở trên;",
+    "3) gợi ý cách ôn cụ thể (xem lại lý thuyết bài nào, luyện tập thêm dạng câu nào);",
+    "4) một lời động viên.",
+    "Chỉ dùng số liệu đã cho, không bịa thêm. Nếu số câu đã làm dưới 10 thì nói rõ mới làm ít nên nhận xét chỉ để tham khảo. Không dùng định dạng markdown nào khác ngoài gạch đầu dòng."
+  );
+  return lines.join("\n");
+}
+
+module.exports = { levelRemark, breakdownByLesson, buildTestFeedback, weakKnowledge, weakReviewPrompt };

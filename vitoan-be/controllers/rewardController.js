@@ -1,6 +1,7 @@
 const Reward = require("../models/Reward");
 const RewardRedemption = require("../models/RewardRedemption");
 const User = require("../models/User");
+const { isStaff } = require("../utils/rbac");
 
 // Đồ trang trí chỉ cần đổi 1 lần là sở hữu vĩnh viễn; VIP thì đổi thêm để cộng dồn thời hạn.
 const COSMETIC_TYPES = ["frame", "avatar", "title", "name_color"];
@@ -37,7 +38,7 @@ async function ownedRewardIds(studentId) {
 
 async function list(req, res, next) {
   try {
-    const isAdmin = req.user && req.user.role === "Admin";
+    const isAdmin = isStaff(req.user);
     const filter = isAdmin ? {} : { isActive: true };
     const rewards = await Reward.find(filter).sort({ type: 1, costPoints: 1 });
     let owned = new Set();

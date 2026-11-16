@@ -6,6 +6,8 @@ const Lesson = require("../models/Lesson");
 const Grade = require("../models/Grade");
 const LessonProgress = require("../models/LessonProgress");
 const { lessonProgressMap } = require("../utils/progress");
+const { normalizePhone } = require("../utils/phone");
+const { ROLE_NAMES, canAssign, canManage, assignableRoles, permissionsOf } = require("../utils/rbac");
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -28,6 +30,16 @@ function toAccountView(user) {
     vipUntil: user.vipUntil,
     isTest: !!user.isTest,
   };
+}
+
+const forbidden = (res) =>
+  res.status(403).json({ success: false, message: "Tài khoản này thuộc cấp ngang hoặc cao hơn bạn nên bạn không có quyền thao tác" });
+// Được thao tác trên tài khoản nếu là chính mình hoặc có cấp thấp hơn mình.
+const canAccess = (actor, target) => String(actor._id) === String(target._id) || canManage(actor, target);
+
+// Danh sách vai trò mà người đang đăng nhập được phép gán (cho form tạo/sửa tài khoản).
+async function myRoles(req, res) {
+  res.json({ success: true, data: { assignable: assignableRoles(req.user), permissions: permissionsOf(req.user) } });
 }
 
 async function listStudents(req, res, next) {
@@ -57,14 +69,18 @@ async function listStudents(req, res, next) {
 
 async function list(req, res, next) {
   try {
-    const filter = {};
+    // RBAC phân cấp: chỉ thấy tài khoản cấp thấp hơn (Admin thấy tất cả) và chính mình.
+    const visibleRoles = ROLE_NAMES.filter((r) => canManage(req.user, r));
+    const filter = { $or: [{ role: { $in: visibleRoles } }, { _id: req.user._id }] };
+    const and = [];
     if (req.query.role) filter.role = req.query.role;
     if (req.query.grade) filter.grade = req.query.grade;
     if (req.query.status) filter.status = req.query.status;
     if (req.query.search) {
       const regex = new RegExp(escapeRegExp(req.query.search.trim()), "i");
-      filter.$or = [{ fullName: regex }, { email: regex }, { username: regex }, { phone: regex }];
+      and.push({ $or: [{ fullName: regex }, { email: regex }, { username: regex }, { phone: regex }] });
     }
+    if (and.length) filter.$and = and;
     const users = await User.find(filter).populate("grade", "name").sort({ createdAt: -1 });
     res.json({ success: true, data: users.map(toAccountView) });
   } catch (err) {
@@ -76,6 +92,7 @@ async function getOne(req, res, next) {
   try {
     const user = await User.findById(req.params.id).populate("grade", "name");
     if (!user) return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản" });
+    if (!canAccess(req.user, user)) return forbidden(res);
     res.json({ success: true, data: toAccountView(user) });
   } catch (err) {
     next(err);
@@ -96,9 +113,13 @@ async function create(req, res, next) {
     const fullName = (req.body.fullName || "").trim();
     const email = (req.body.email || "").trim().toLowerCase();
     const password = req.body.password || "";
-    const role = req.body.role === "Admin" ? "Admin" : "Student";
+    const role = req.body.role || "Student";
+    if (!canAssign(req.user, role)) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền tạo tài khoản với vai trò này" });
+    }
     const grade = req.body.grade || undefined;
-    const phone = (req.body.phone || "").trim();
+    const phoneInput = (req.body.phone || "").trim();
+    const phone = phoneInput ? normalizePhone(phoneInput) : null;
 
     if (!fullName || !password) {
       return res.status(400).json({ success: false, message: "Thiếu họ tên hoặc mật khẩu" });
@@ -108,6 +129,12 @@ async function create(req, res, next) {
     }
     if (email && !EMAIL_REGEX.test(email)) {
       return res.status(400).json({ success: false, message: "Email không đúng định dạng" });
+    }
+    if (phoneInput && !phone) {
+      return res.status(400).json({ success: false, message: "Số điện thoại không đúng định dạng" });
+    }
+    if (phone && (await User.findOne({ phone, phoneVerified: true }))) {
+      return res.status(409).json({ success: false, message: "Số điện thoại đã được sử dụng" });
     }
 
     let username = (req.body.username || "").trim().toLowerCase();
@@ -134,6 +161,7 @@ async function create(req, res, next) {
       email: email || undefined,
       password,
       phone: phone || undefined,
+      phoneVerified: !!phone, // quản trị viên tạo nên coi như đã xác thực
       role,
       grade: role === "Student" ? grade : undefined,
       isActive: true,
@@ -150,6 +178,8 @@ async function update(req, res, next) {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản" });
+    if (!canAccess(req.user, user)) return forbidden(res);
+    const isSelf = String(user._id) === String(req.user._id);
 
     const fullName = (req.body.fullName || "").trim();
     const email = (req.body.email || "").trim().toLowerCase();
@@ -164,10 +194,21 @@ async function update(req, res, next) {
 
     user.fullName = fullName;
     if (email) user.email = email;
-    user.phone = (req.body.phone || "").trim() || undefined;
-    if (req.body.role === "Admin" || req.body.role === "Student") {
-      if (String(user._id) === String(req.user._id) && req.body.role !== "Admin") {
-        return res.status(400).json({ success: false, message: "Không thể tự bỏ quyền quản trị của chính mình" });
+    const phoneInput = (req.body.phone || "").trim();
+    const phone = phoneInput ? normalizePhone(phoneInput) : null;
+    if (phoneInput && !phone) return res.status(400).json({ success: false, message: "Số điện thoại không đúng định dạng" });
+    if (phone && phone !== user.phone && (await User.findOne({ phone, phoneVerified: true, _id: { $ne: user._id } }))) {
+      return res.status(409).json({ success: false, message: "Số điện thoại đã được sử dụng" });
+    }
+    if (phone !== (user.phone || null)) user.phoneVerified = !!phone;
+    user.phone = phone || undefined;
+    if (req.body.role && req.body.role !== user.role) {
+      if (isSelf) {
+        return res.status(400).json({ success: false, message: "Không thể tự đổi vai trò của chính mình" });
+      }
+      // Phải có quyền với cả vai trò hiện tại (đã kiểm ở trên) lẫn vai trò mới.
+      if (!canAssign(req.user, req.body.role)) {
+        return res.status(403).json({ success: false, message: "Bạn không có quyền gán vai trò này" });
       }
       user.role = req.body.role;
     }
@@ -226,11 +267,13 @@ async function updateStatus(req, res, next) {
     if (String(req.params.id) === String(req.user._id) && status !== "active") {
       return res.status(400).json({ success: false, message: "Không thể tự khóa tài khoản của chính mình" });
     }
+    const target = await User.findById(req.params.id).select("role");
+    if (!target) return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản" });
+    if (!canManage(req.user, target)) return forbidden(res);
     const user = await User.findByIdAndUpdate(req.params.id, { status }, { returnDocument: "after" }).populate(
       "grade",
       "name"
     );
-    if (!user) return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản" });
     res.json({ success: true, data: toAccountView(user) });
   } catch (err) {
     next(err);
@@ -415,4 +458,4 @@ async function publicStats(req, res, next) {
   }
 }
 
-module.exports = { listLessonProgress, setLessonProgress, listStudents, list, getOne, create, update, updateStatus, leaderboard, publicLeaderboard, publicStats };
+module.exports = { myRoles, listLessonProgress, setLessonProgress, listStudents, list, getOne, create, update, updateStatus, leaderboard, publicLeaderboard, publicStats };

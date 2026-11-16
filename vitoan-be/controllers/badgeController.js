@@ -1,6 +1,7 @@
 const Badge = require("../models/Badge");
 const StudentBadge = require("../models/StudentBadge");
 const { computeBadgeStats } = require("../utils/badgeStats");
+const { isStaff } = require("../utils/rbac");
 
 async function progress(req, res, next) {
   try {
@@ -14,9 +15,9 @@ async function progress(req, res, next) {
 async function list(req, res, next) {
   try {
     const filter = {};
-    if (!req.user || req.user.role !== "Admin") filter.isActive = true;
+    if (!isStaff(req.user)) filter.isActive = true;
     const badges = await Badge.find(filter).sort({ createdAt: -1 });
-    if (req.user && req.user.role === "Admin") {
+    if (isStaff(req.user)) {
       // Quản trị viên xem thêm số học sinh đã đạt từng huy hiệu để biết huy hiệu quá dễ/khó.
       const counts = await StudentBadge.aggregate([{ $group: { _id: "$badge", n: { $sum: 1 } } }]);
       const byBadge = new Map(counts.map((c) => [String(c._id), c.n]));

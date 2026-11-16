@@ -9,8 +9,8 @@ router.get("/me", protect, authorize("Student"), myRedemptions);
 router.get("/inventory", protect, authorize("Student"), inventory);
 router.post("/equip", protect, authorize("Student"), equip);
 router.post("/:id/redeem", protect, authorize("Student"), redeem);
-router.post("/", protect, authorize("Admin"), create);
-router.put("/:id", protect, authorize("Admin"), update);
-router.delete("/:id", protect, authorize("Admin"), remove);
+router.post("/", protect, authorize("Manager"), create);
+router.put("/:id", protect, authorize("Manager"), update);
+router.delete("/:id", protect, authorize("Manager"), remove);
 
 module.exports = router;

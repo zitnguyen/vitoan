@@ -2,10 +2,11 @@ const Mission = require("../models/Mission");
 const MissionClaim = require("../models/MissionClaim");
 const User = require("../models/User");
 const { getPeriodRange, computeMissionProgress } = require("../utils/missionStats");
+const { isStaff } = require("../utils/rbac");
 
 async function list(req, res, next) {
   try {
-    const isAdmin = req.user && req.user.role === "Admin";
+    const isAdmin = isStaff(req.user);
     const filter = isAdmin ? {} : { isActive: true };
     const missions = await Mission.find(filter).sort({ type: 1, createdAt: 1 });
 

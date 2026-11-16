@@ -58,7 +58,7 @@ function GradeDefaultRedirect() {
 
 function AdminLayout({ children }) {
   return (
-    <ProtectedRoute allowedRoles={["Admin"]}>
+    <ProtectedRoute allowedRoles={["Manager", "Admin"]}>
       <AdminShell>{children}</AdminShell>
     </ProtectedRoute>
   );
@@ -73,6 +73,8 @@ export default function App() {
     /^\/bai\/[^/]+\/luyen-tap/.test(location.pathname) ||
     /^\/kiem-tra\/(?!ket-qua)[^/]+$/.test(location.pathname);
   const hideChrome = isAdminRoute || isFocusRoute;
+  // Trang đăng nhập/đăng ký/chọn lớp… là form ngắn: bỏ chân trang to để trang vừa khít màn hình, không phải cuộn.
+  const isAuthRoute = ["/dang-nhap", "/dang-ky", "/quen-mat-khau", "/chon-lop", "/doi-mat-khau"].includes(location.pathname.replace(/\/$/, ""));
   // Trang Bạn đồng hành vừa khít màn hình: không footer, không cuộn trang.
   const isChatRoute = location.pathname === "/ban-dong-hanh";
 
@@ -103,7 +105,7 @@ export default function App() {
           <Route
             path="/ket-qua/:attemptId"
             element={
-              <ProtectedRoute allowedRoles={["Student", "Admin"]}>
+              <ProtectedRoute allowedRoles={["Student", "Manager", "Admin"]}>
                 <ResultPage />
               </ProtectedRoute>
             }
@@ -135,7 +137,7 @@ export default function App() {
           <Route
             path="/kiem-tra/ket-qua/:attemptId"
             element={
-              <ProtectedRoute allowedRoles={["Student", "Admin"]}>
+              <ProtectedRoute allowedRoles={["Student", "Manager", "Admin"]}>
                 <TestResultPage />
               </ProtectedRoute>
             }
@@ -151,7 +153,7 @@ export default function App() {
           <Route
             path="/ho-so"
             element={
-              <ProtectedRoute allowedRoles={["Student", "Admin"]}>
+              <ProtectedRoute allowedRoles={["Student", "Manager", "Admin"]}>
                 <ProfilePage />
               </ProtectedRoute>
             }
@@ -159,7 +161,7 @@ export default function App() {
           <Route
             path="/doi-mat-khau"
             element={
-              <ProtectedRoute allowedRoles={["Student", "Admin"]}>
+              <ProtectedRoute allowedRoles={["Student", "Manager", "Admin"]}>
                 <ChangePasswordPage />
               </ProtectedRoute>
             }
@@ -391,7 +393,7 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
-      {!hideChrome && !isChatRoute && <SiteFooter />}
+      {!hideChrome && !isChatRoute && !isAuthRoute && <SiteFooter />}
     </div>
   );
 }

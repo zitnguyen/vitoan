@@ -6,9 +6,9 @@ const router = express.Router();
 
 router.get("/", optionalAuth, list);
 router.get("/:id", protect, getOne);
-router.post("/", protect, authorize("Admin"), create);
-router.post("/:id/duplicate", protect, authorize("Admin"), duplicate);
-router.put("/:id", protect, authorize("Admin"), update);
-router.delete("/:id", protect, authorize("Admin"), remove);
+router.post("/", protect, authorize("Manager"), create);
+router.post("/:id/duplicate", protect, authorize("Manager"), duplicate);
+router.put("/:id", protect, authorize("Manager"), update);
+router.delete("/:id", protect, authorize("Manager"), remove);
 
 module.exports = router;

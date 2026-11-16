@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import "@fontsource/nunito/vietnamese-500.css";
 import "@fontsource/nunito/latin-500.css";
 import "@fontsource/nunito/vietnamese-600.css";
@@ -17,9 +17,12 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import { DialogProvider } from "./context/DialogContext.jsx";
 
-createRoot(document.getElementById("root")).render(
-  <StrictMode>
-    <BrowserRouter>
+// Router dạng "dữ liệu" (createBrowserRouter) để dùng được useBlocker — chặn nút Lùi khi đang làm bài kiểm tra.
+// Toàn bộ tuyến đường vẫn khai báo trong <Routes> của App như cũ (route "*" bọc ngoài).
+const router = createBrowserRouter([
+  {
+    path: "*",
+    element: (
       <ToastProvider>
         <DialogProvider>
           <AuthProvider>
@@ -27,6 +30,12 @@ createRoot(document.getElementById("root")).render(
           </AuthProvider>
         </DialogProvider>
       </ToastProvider>
-    </BrowserRouter>
+    ),
+  },
+]);
+
+createRoot(document.getElementById("root")).render(
+  <StrictMode>
+    <RouterProvider router={router} />
   </StrictMode>
 );

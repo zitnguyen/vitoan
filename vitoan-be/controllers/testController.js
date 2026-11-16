@@ -5,6 +5,7 @@ const Lesson = require("../models/Lesson");
 const Question = require("../models/Question");
 const User = require("../models/User");
 const { lessonProgressMap } = require("../utils/progress");
+const { isStaff } = require("../utils/rbac");
 
 // Ràng buộc "học rồi mới kiểm tra": chỉ tính các bài học mà câu hỏi của đề thực sự lấy từ đó
 // (không bắt học cả chương trình nếu đề không hỏi tới). Đề chủ đề: phải học xong tất cả các bài đó;
@@ -33,8 +34,8 @@ async function learningStatus(test, studentId, cache) {
 }
 
 function stripQuestion(question) {
-  const { _id, type, text, audioText, imageUrl, choices, difficulty, order, source } = question;
-  return { _id, type, text, audioText, imageUrl, choices, difficulty, order, source };
+  const { _id, type, text, audioText, imageUrl, choices, choiceImages, difficulty, order, source } = question;
+  return { _id, type, text, audioText, imageUrl, choices, choiceImages, difficulty, order, source };
 }
 
 async function list(req, res, next) {
@@ -47,7 +48,7 @@ async function list(req, res, next) {
     if (req.query.semester) filter.semester = Number(req.query.semester);
     if (req.query.level) filter.level = req.query.level;
     if (req.query.search) filter.title = new RegExp(escapeRegExp(req.query.search.trim()), "i");
-    const isAdmin = req.user && req.user.role === "Admin";
+    const isAdmin = isStaff(req.user);
     if (!isAdmin) filter.isActive = true;
     else if (req.query.status === "draft") filter.isActive = false;
     else if (req.query.status === "published") filter.isActive = true;
@@ -134,7 +135,7 @@ async function getOne(req, res, next) {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Vui lòng đăng nhập để làm bài kiểm tra" });
     }
-    const isAdmin = req.user.role === "Admin";
+    const isAdmin = isStaff(req.user);
     if (!isAdmin) {
       const ls = await learningStatus(test, req.user._id, new Map());
       if (ls.locked) {

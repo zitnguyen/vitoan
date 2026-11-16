@@ -4,11 +4,11 @@ const { optionalAuth, protect, authorize } = require("../middleware/authMiddlewa
 
 const router = express.Router();
 
-router.get("/", protect, authorize("Admin"), list);
+router.get("/", protect, authorize("Manager"), list);
 router.get("/lesson/:lessonId", optionalAuth, getByLesson);
-router.post("/ai-generate", protect, authorize("Admin"), aiGenerate);
-router.post("/", protect, authorize("Admin"), create);
-router.put("/:id", protect, authorize("Admin"), update);
-router.delete("/:id", protect, authorize("Admin"), remove);
+router.post("/ai-generate", protect, authorize("Manager"), aiGenerate);
+router.post("/", protect, authorize("Manager"), create);
+router.put("/:id", protect, authorize("Manager"), update);
+router.delete("/:id", protect, authorize("Manager"), remove);
 
 module.exports = router;

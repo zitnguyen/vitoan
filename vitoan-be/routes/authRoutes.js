@@ -2,11 +2,14 @@ const express = require("express");
 const {
   register,
   verifyRegisterCode,
+  resendRegisterCode,
   login,
   googleAuth,
   forgotPassword,
   verifyResetCode,
   resetPassword,
+  sendPhoneCode,
+  verifyPhoneCode,
   setGrade,
   updateProfile,
   updatePreferences,
@@ -23,11 +26,14 @@ const router = express.Router();
 
 router.post("/register", register);
 router.post("/verify-register", verifyRegisterCode);
+router.post("/resend-register", resendRegisterCode);
 router.post("/login", login);
 router.post("/google", googleAuth);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-reset-code", verifyResetCode);
 router.post("/reset-password", resetPassword);
+router.post("/phone/send", protect, sendPhoneCode);
+router.post("/phone/verify", protect, verifyPhoneCode);
 router.post("/grade", protect, setGrade);
 router.put("/profile", protect, updateProfile);
 router.put("/preferences", protect, updatePreferences);

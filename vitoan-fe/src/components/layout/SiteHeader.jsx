@@ -26,6 +26,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { gradeService } from "../../api/services";
 import OwlMascot from "../illustrations/OwlMascot.jsx";
 import { cn } from "../../lib/utils";
+import { isStaff } from "../../lib/roles.js";
 import UserAvatar from "../common/UserAvatar.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import UserName from "../common/UserName.jsx";
@@ -183,7 +184,7 @@ function UserMenu({ user, onLogout }) {
                 <History className="h-6 w-6" /> Lịch sử làm bài
               </Link>
             )}
-            {user.role === "Admin" && (
+            {isStaff(user) && (
               <Link to="/admin" onClick={() => setOpen(false)} className={menuItemClass}>
                 <ShieldCheck className="h-6 w-6" /> Trang quản trị
               </Link>
@@ -287,7 +288,7 @@ function MobileMenu({ user, onLogout, onClose }) {
                   <History className="h-6 w-6" /> Lịch sử làm bài
                 </button>
               )}
-              {user.role === "Admin" && (
+              {isStaff(user) && (
                 <button type="button" onClick={() => go("/admin")} className={cn(itemClass, "w-full")}>
                   <ShieldCheck className="h-6 w-6" /> Trang quản trị
                 </button>
@@ -330,7 +331,7 @@ function MobileMenu({ user, onLogout, onClose }) {
 export default function SiteHeader() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, key: locationKey } = useLocation();
   const guestLanding = !user && pathname === "/";
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -389,7 +390,8 @@ export default function SiteHeader() {
         {/* Luôn giữ chỗ cho nút lùi (ẩn ở trang chủ) để thanh menu không bị dịch khi đổi trang */}
         <button
           type="button"
-          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/"))}
+          // key "default" = trang mở thẳng (không có trang trước trong ứng dụng) → về trang chủ, không thoát ra trang web khác.
+          onClick={() => (locationKey !== "default" ? navigate(-1) : navigate("/"))}
           title="Quay lại trang trước"
           aria-label="Quay lại trang trước"
           tabIndex={pathname === "/" ? -1 : 0}

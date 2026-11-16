@@ -84,6 +84,7 @@ app.use(
     "/api/auth/login",
     "/api/auth/register",
     "/api/auth/verify-register",
+    "/api/auth/resend-register",
     "/api/auth/forgot-password",
     "/api/auth/verify-reset-code",
     "/api/auth/reset-password",
@@ -91,9 +92,20 @@ app.use(
   authLimiter
 );
 
+// Mỗi lần gửi mã là một SMS/email (tốn tiền, dễ bị lạm dụng) nên giới hạn riêng theo IP.
+const otpSendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: isProduction ? 10 : 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Bạn đã yêu cầu gửi mã quá nhiều lần, vui lòng thử lại sau" },
+});
+app.use(["/api/auth/register", "/api/auth/resend-register", "/api/auth/forgot-password", "/api/auth/phone/send"], otpSendLimiter);
+
 const smallJson = express.json({ limit: "2mb" });
 const bigJson = express.json({ limit: "30mb" }); // riêng cho khôi phục sao lưu
-app.use((req, res, next) => (req.path === "/api/admin/restore" ? bigJson(req, res, next) : smallJson(req, res, next)));
+const BIG_JSON_PATHS = ["/api/admin/restore", "/api/questions/import", "/api/lessons/import", "/api/practice-sets/import"]; // nhập Excel nhiều dòng
+app.use((req, res, next) => (BIG_JSON_PATHS.includes(req.path) ? bigJson(req, res, next) : smallJson(req, res, next)));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(mongoSanitizeExpress5());

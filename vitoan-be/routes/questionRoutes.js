@@ -1,7 +1,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = rateLimit;
-const { tree, bulk, list, listByLesson, aiGenerate, checkAnswer, create, update, remove, importMany } = require("../controllers/questionController");
+const { tree, bulk, list, listByLesson, aiGenerate, checkAnswer, create, update, remove, importMany, exportQuestions } = require("../controllers/questionController");
 const { getHint } = require("../controllers/hintController");
 const { protect, optionalAuth, authorize } = require("../middleware/authMiddleware");
 
@@ -18,16 +18,17 @@ const checkLimiter = rateLimit({
   message: { success: false, message: "Em đã kiểm tra câu này nhiều lần rồi, hãy suy nghĩ kỹ hơn hoặc thử lại sau ít phút nhé!" },
 });
 
-router.get("/", protect, authorize("Admin"), list);
-router.get("/tree", protect, authorize("Admin"), tree);
-router.post("/bulk", protect, authorize("Admin"), bulk);
+router.get("/", protect, authorize("Manager"), list);
+router.get("/tree", protect, authorize("Manager"), tree);
+router.get("/export", protect, authorize("Manager"), exportQuestions);
+router.post("/bulk", protect, authorize("Manager"), bulk);
 router.get("/lesson/:lessonId", optionalAuth, listByLesson);
 router.post("/:id/check", optionalAuth, checkLimiter, checkAnswer);
 router.post("/:id/hint", optionalAuth, getHint);
-router.post("/ai-generate", protect, authorize("Admin"), aiGenerate);
-router.post("/import", protect, authorize("Admin"), importMany);
-router.post("/", protect, authorize("Admin"), create);
-router.put("/:id", protect, authorize("Admin"), update);
-router.delete("/:id", protect, authorize("Admin"), remove);
+router.post("/ai-generate", protect, authorize("Manager"), aiGenerate);
+router.post("/import", protect, authorize("Manager"), importMany);
+router.post("/", protect, authorize("Manager"), create);
+router.put("/:id", protect, authorize("Manager"), update);
+router.delete("/:id", protect, authorize("Manager"), remove);
 
 module.exports = router;

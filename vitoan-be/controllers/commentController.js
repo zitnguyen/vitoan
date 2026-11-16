@@ -1,4 +1,5 @@
 const Comment = require("../models/Comment");
+const { isStaff } = require("../utils/rbac");
 
 async function listByLesson(req, res, next) {
   try {
@@ -52,7 +53,7 @@ async function remove(req, res, next) {
     const comment = await Comment.findById(req.params.id);
     if (!comment) return res.status(404).json({ success: false, message: "Không tìm thấy bình luận" });
     const isOwner = comment.user.toString() === req.user._id.toString();
-    const isAdmin = req.user.role === "Admin";
+    const isAdmin = isStaff(req.user);
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ success: false, message: "Không có quyền xoá bình luận này" });
     }

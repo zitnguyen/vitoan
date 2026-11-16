@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+/* eslint-disable react-refresh/only-export-components */
 import { readSheet } from "read-excel-file/browser";
 import writeExcelFile from "write-excel-file/browser";
+import { saveSheet } from "../../lib/excelIO";
 import { X, Download, FileSpreadsheet, CheckCircle2, AlertTriangle, Upload } from "lucide-react";
 import { questionService } from "../../api/services";
 import Button from "../ui/Button.jsx";
@@ -29,7 +31,50 @@ const COLUMNS = [
   { key: "page", header: "Trang", width: 8 },
   { key: "exercise", header: "Bài tập số", width: 12 },
   { key: "url", header: "Đường dẫn nguồn (nếu có)", width: 26 },
+  { key: "id", header: "Mã câu hỏi (đừng sửa; để trống = thêm câu mới)", width: 26, readonly: true },
+  { key: "imageUrl", header: "Đường dẫn ảnh (để trống = giữ ảnh cũ)", width: 30 },
 ];
+
+// Cột thông tin tham khảo thêm ở cuối tệp xuất (không dùng khi nhập).
+const INFO_COLUMNS = [
+  { header: "Lớp (chỉ để xem)", width: 10, readonly: true },
+  { header: "Môn (chỉ để xem)", width: 12, readonly: true },
+  { header: "Chủ đề (chỉ để xem)", width: 34, readonly: true },
+  { header: "Bài học (chỉ để xem)", width: 34, readonly: true },
+];
+const TYPE_OUT = { multiple_choice: "trac_nghiem", true_false: "dung_sai", fill_blank: "dien", listen_choice: "nghe_chon", listen_fill: "nghe_dien" };
+const DIFF_OUT = { easy: "de", medium: "trung_binh", hard: "kho" };
+const KIND_OUT = { self: "tu_bien_soan", sgk: "sgk", sbt: "sbt", other: "khac" };
+
+// Xuất danh sách câu hỏi (đã lấy từ /questions/export) ra Excel — cùng khuôn với tệp nhập, nên sửa xong nhập lại được:
+// dòng có mã chỉ cập nhật nếu đã sửa, dòng không đổi bị bỏ qua.
+export async function exportQuestionsXlsx(questions, fileName) {
+  const rows = questions
+    .filter((q) => TYPE_OUT[q.type])
+    .map((q) => {
+      const isFill = q.type === "fill_blank" || q.type === "listen_fill";
+      const s = q.source || {};
+      const cell = {
+        lesson: q.lesson?._id,
+        type: TYPE_OUT[q.type],
+        text: q.text,
+        a: q.choices?.[0], b: q.choices?.[1], c: q.choices?.[2], d: q.choices?.[3],
+        correct: isFill ? q.correctText : "ABCD"[q.correctIndex],
+        audio: q.audioText,
+        explanation: q.explanation,
+        difficulty: DIFF_OUT[q.difficulty] || "de",
+        kind: KIND_OUT[s.kind] || "tu_bien_soan",
+        book: s.book, volume: s.volume, page: s.page, exercise: s.exercise, url: s.url,
+        id: q._id,
+        imageUrl: q.imageUrl,
+      };
+      return [
+        ...COLUMNS.map((c) => cell[c.key] ?? ""),
+        q.lesson?.grade?.name, q.lesson?.subject?.name, q.lesson?.chapter?.title, q.lesson?.title,
+      ];
+    });
+  await saveSheet(fileName, [...COLUMNS, ...INFO_COLUMNS], rows);
+}
 
 const TYPE_ALIAS = {
   trac_nghiem: "multiple_choice", "trắc nghiệm": "multiple_choice", multiple_choice: "multiple_choice",
@@ -68,7 +113,10 @@ function parseRow(cells, rowNo, defaultLesson) {
   const isFill = type === "fill_blank" || type === "listen_fill";
   const q = {
     row: rowNo,
-    lesson: v.lesson || defaultLesson,
+    // Dòng có mã câu hỏi (tệp xuất từ hệ thống) → giữ nguyên bài cũ trừ khi cột bài học được sửa.
+    _id: v.id || undefined,
+    imageUrl: v.imageUrl,
+    lesson: v.lesson || (v.id ? "" : defaultLesson),
     type: type || "multiple_choice",
     text: v.text,
     audioText: v.audio,
@@ -90,7 +138,9 @@ function parseRow(cells, rowNo, defaultLesson) {
     q.correctText = v.correct;
   } else {
     q.choices = type === "true_false" ? (v.a || v.b ? [v.a || "Đúng", v.b || "Sai"] : ["Đúng", "Sai"]) : [v.a, v.b, v.c, v.d].filter(Boolean);
-    if (q.choices.length < 2) errors.push("Cần ít nhất 2 đáp án");
+    const isYesNo = type === "listen_choice" && q.choices.length === 2 && q.choices[0] === "Có" && q.choices[1] === "Không";
+    const need = type === "true_false" || isYesNo ? 2 : 4;
+    if (q.choices.length !== need) errors.push(type === "true_false" ? "Câu Đúng/Sai cần đúng 2 đáp án" : "Câu trắc nghiệm cần đủ 4 đáp án (A, B, C, D)");
     const letter = v.correct.toUpperCase();
     let idx = "ABCD".indexOf(letter);
     if (letter.length !== 1 || idx < 0) idx = q.choices.findIndex((c) => c.toLowerCase() === v.correct.toLowerCase());
@@ -135,7 +185,7 @@ export default function QuestionImportDialog({ lessonId, lessonTitle, onClose, o
     try {
       const res = await questionService.importMany(ok);
       setResult(res.data);
-      if (res.data.inserted) onImported?.();
+      if (res.data.inserted || res.data.updated) onImported?.();
     } catch (err) {
       setError(err.apiMessage || "Nhập câu hỏi thất bại");
     } finally {
@@ -155,7 +205,12 @@ export default function QuestionImportDialog({ lessonId, lessonTitle, onClose, o
               <FileSpreadsheet className="h-5 w-5 text-primary" /> Nhập câu hỏi từ Excel
             </h2>
             <p className="mt-0.5 text-sm text-slate-500">
-              Mặc định nhập vào bài <b className="text-slate-700">{lessonTitle}</b> (mã <code className="rounded bg-slate-100 px-1">{lessonId}</code>). Muốn nhập cho bài khác thì điền mã bài ở cột đầu.
+              {lessonId ? (
+                <>Mặc định nhập vào bài <b className="text-slate-700">{lessonTitle}</b> (mã <code className="rounded bg-slate-100 px-1">{lessonId}</code>). Muốn nhập cho bài khác thì điền mã bài ở cột đầu.</>
+              ) : (
+                <>Điền mã bài học ở cột đầu của từng dòng (hoặc dùng tệp đã xuất từ hệ thống).</>
+              )}
+              {" "}Dòng có <b>mã câu hỏi</b> chỉ được cập nhật nếu nội dung đã sửa; dòng không đổi sẽ bỏ qua.
             </p>
           </div>
           <IconButton title="Đóng" onClick={onClose}>
@@ -193,7 +248,7 @@ export default function QuestionImportDialog({ lessonId, lessonTitle, onClose, o
         {result && (
           <div className="mt-4 rounded-xl bg-green-50 px-4 py-3 text-green-800">
             <p className="flex items-center gap-1.5 font-bold">
-              <CheckCircle2 className="h-5 w-5" /> Đã nhập {result.inserted} câu hỏi.
+              <CheckCircle2 className="h-5 w-5" /> Thêm mới {result.inserted} · cập nhật {result.updated || 0} (chỉ các dòng đã sửa) · không đổi {result.unchanged || 0}.
             </p>
             {result.errors?.length > 0 && (
               <ul className="mt-1 text-sm text-red-600">
@@ -227,7 +282,7 @@ export default function QuestionImportDialog({ lessonId, lessonTitle, onClose, o
                   {rows.map(({ q, errors }) => (
                     <tr key={q.row} className={cn(errors.length && "bg-red-50/50")}>
                       <td className="px-3 py-2 text-slate-400">{q.row}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{TYPE_LABEL[q.type]}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{TYPE_LABEL[q.type]}{q._id && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700">có mã</span>}</td>
                       <td className="max-w-xs px-3 py-2 text-slate-700">{q.text}</td>
                       <td className="px-3 py-2 font-semibold text-green-700">{q.correctText || q.choices[q.correctIndex]}</td>
                       <td className="max-w-[14rem] px-3 py-2 text-xs text-slate-500">{formatSource(q.source)}</td>
